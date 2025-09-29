@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "NEXT_DISABLE_TURBOPACK=1 next dev",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint"
@@ -13,7 +13,10 @@
     "@capacitor/core": "^7.4.3",
     "@capacitor/ios": "^7.4.3",
     "@supabase/supabase-js": "^2.58.0",
+    "api-ecoledirecte": "^1.4.4",
+    "axios": "^1.12.2",
     "next": "15.5.4",
+    "node-fetch": "^3.3.2",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },

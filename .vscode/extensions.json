@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "eamodio.gitlens",
+    "humao.rest-client",
+    "mikestead.dotenv",
+    "PKief.material-icon-theme",
+    "supabase.vscode-supabase"
+  ]
+}
