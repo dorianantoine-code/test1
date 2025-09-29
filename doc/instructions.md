@@ -1,6 +1,6 @@
 cd "/Users/dorianantoine/Library/CloudStorage/GoogleDrive-dorianantoine@gmail.com/Mon Drive/dev/test1"
 
-token git : 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
+token git : 
 
 # 1) Voir ce qui a changé (optionnel)
 
