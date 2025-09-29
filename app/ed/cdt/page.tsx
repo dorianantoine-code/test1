@@ -249,22 +249,24 @@ export default function CdtPage() {
   return (
     <main className="min-h-screen p-6 md:p-10">
       <div className="max-w-5xl mx-auto space-y-6">
+        {/* HEADER — texte et bouton en blanc (comme avant) */}
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-black">Cahier de texte</h1>
-            <p className="text-sm text-gray-700">{headerEleve}</p>
+            <h1 className="text-2xl font-semibold text-white">Cahier de texte</h1>
+            <p className="text-sm text-white/80">{headerEleve}</p>
           </div>
           <Link
             href="/dashboard"
-            className="rounded-xl border px-4 py-2 hover:bg-gray-50 text-black border-gray-300"
+            className="rounded-xl border px-4 py-2 text-white border-white/40 hover:bg-white/10"
           >
             ← Retour
           </Link>
         </header>
 
+        {/* Barre d'action neutre (garde contraste par défaut) */}
         <form
           onSubmit={loadCdt}
-          className="rounded-2xl border p-4 flex items-center gap-3 border-gray-300"
+          className="rounded-2xl border p-4 flex items-center gap-3 border-gray-300 bg-white/60 backdrop-blur"
         >
           <button
             type="submit"
@@ -285,8 +287,8 @@ export default function CdtPage() {
           </div>
         )}
 
-        {/* LISTE CONTRASTÉE */}
-        <section className="rounded-2xl border p-4 space-y-4 border-gray-300">
+        {/* LISTE CONTRASTÉE (titres noirs, cartes blanches, badges lisibles) */}
+        <section className="rounded-2xl border p-4 space-y-4 border-gray-300 bg-white/60 backdrop-blur">
           <h2 className="text-lg font-semibold text-black">Cahier de texte</h2>
 
           {itemsByDate.length === 0 && !loading && (
@@ -405,8 +407,8 @@ export default function CdtPage() {
                                         <span className="text-gray-800 text-xs">
                                           ({Math.round(f.taille / 1024)} Ko)
                                         </span>
-                                        {/* Pour le téléchargement, on pourra ajouter un proxy:
-                                            /api/ed/download?type=FICHIER_CDT&id={f.id} */}
+                                        {/* Proxy de téléchargement possible :
+                                           /api/ed/download?type=FICHIER_CDT&id={f.id} */}
                                       </li>
                                     ))}
                                   </ul>
@@ -437,7 +439,7 @@ export default function CdtPage() {
         </section>
 
         {/* Réponse brute (debug) */}
-        <section className="rounded-2xl border p-6 space-y-3 border-gray-300">
+        <section className="rounded-2xl border p-6 space-y-3 border-gray-300 bg-white/60 backdrop-blur">
           <h2 className="text-lg font-semibold text-black">Réponse brute</h2>
           <pre className="text-xs overflow-auto p-4 rounded-xl bg-gray-900 text-gray-100 font-mono leading-relaxed border border-gray-700">
             {JSON.stringify(raw, null, 2)}
