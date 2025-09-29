@@ -1,6 +1,28 @@
 cd "/Users/dorianantoine/Library/CloudStorage/GoogleDrive-dorianantoine@gmail.com/Mon Drive/dev/test1"
 
-token git : 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
+token git : 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
+
+# 1) Voir ce qui a changé (optionnel)
+
+git status
+
+# 2) Ajouter TOUTES les modifs (y compris les nouveaux fichiers)
+
+git add -A
+
+# 3) Commit avec un message parlant
+git add -A
+git commit -m "feat(agenda): semaine en cours par défaut + rendu visuel EDT; fix: extraction id élève"
+git pull --rebase origin main
+git pull --rebase origin main
+git push origin main
+# 4) Se resynchroniser proprement si le remote a avancé
+
+git pull --rebase origin main
+
+# 5) Pousser
+
+git push origin main
 
 export ED_DEBUG=1
 NEXT_DISABLE_TURBOPACK=1 pnpm dev
