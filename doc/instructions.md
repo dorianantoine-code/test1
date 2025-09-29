@@ -1,6 +1,6 @@
 cd "/Users/dorianantoine/Library/CloudStorage/GoogleDrive-dorianantoine@gmail.com/Mon Drive/dev/test1"
 
-token git : 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
+token git : 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
 
 # 1) Voir ce qui a changé (optionnel)
 
@@ -11,11 +11,13 @@ git status
 git add -A
 
 # 3) Commit avec un message parlant
+
 git add -A
 git commit -m "feat(agenda): semaine en cours par défaut + rendu visuel EDT; fix: extraction id élève"
 git pull --rebase origin main
 git pull --rebase origin main
 git push origin main
+
 # 4) Se resynchroniser proprement si le remote a avancé
 
 git pull --rebase origin main
