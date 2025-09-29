@@ -4,18 +4,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-type StartResp = {
-  ok: boolean;
-  status: number;
-  data: any;
-};
-
-type AnswerResp = {
-  ok: boolean;
-  status: number;
-  data: any;
-};
-
+type StartResp = { ok: boolean; status: number; data: any };
+type AnswerResp = { ok: boolean; status: number; data: any };
 type LoginResp = {
   ok: boolean;
   status: number;
@@ -25,18 +15,13 @@ type LoginResp = {
   data: any;
 };
 
-// --- Helpers Base64 (tolérants: enlève espaces/CRLF, gère URL-safe) ---
-function b64clean(s: string) {
-  return s.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
-}
+// --- Helpers Base64 (pour afficher la question/réponses lisibles) ---
 function b64decodeSafe(s?: string | null): string | undefined {
   if (!s) return undefined;
   try {
-    const cleaned = b64clean(s);
-    // Padding
+    const cleaned = s.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
     const pad = cleaned.length % 4 ? 4 - (cleaned.length % 4) : 0;
     const padded = cleaned + '='.repeat(pad);
-    // atob est dispo côté client
     return decodeURIComponent(
       Array.prototype.map
         .call(atob(padded), (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
@@ -47,97 +32,38 @@ function b64decodeSafe(s?: string | null): string | undefined {
   }
 }
 
-// Essaie d'extraire question + propositions, et décode Base64 si nécessaire
 function extractQcm(root: any): {
   decodedQuestion?: string;
   items: Array<{ base64: string; label?: string }>;
 } {
-  const out: { decodedQuestion?: string; items: Array<{ base64: string; label?: string }> } = {
-    items: [],
+  const out = {
+    decodedQuestion: undefined as string | undefined,
+    items: [] as Array<{ base64: string; label?: string }>,
   };
   if (!root) return out;
-
-  // La doc indique data.question (b64) + data.propositions (array b64) sur /start
-  // https://github.com/EduWireApps/ecoledirecte-api-docs#login (section QCM)
-  // => On checke d'abord ces clés "canoniques"
   const canonical = root?.data ?? root;
   const qB64 = canonical?.question;
   const arr = canonical?.propositions;
 
-  if (typeof qB64 === 'string') {
-    out.decodedQuestion = b64decodeSafe(qB64);
-  }
+  if (typeof qB64 === 'string') out.decodedQuestion = b64decodeSafe(qB64);
 
-  if (Array.isArray(arr) && arr.length > 0) {
-    // cas le plus courant: tableau de strings base64
+  if (Array.isArray(arr)) {
     if (typeof arr[0] === 'string') {
-      for (const s of arr as string[]) {
-        if (!s) continue;
-        out.items.push({ base64: s, label: b64decodeSafe(s) });
-      }
-      return out;
-    }
-    // sinon, parfois objets { choix: "<b64>", label?: "<b64>" }
-    for (const it of arr) {
-      const b64 = it?.choix ?? it?.value ?? it?.val ?? it?.id ?? it?.key ?? '';
-      if (typeof b64 === 'string' && b64) {
-        const decoded = b64decodeSafe(b64);
-        // si le label est aussi encodé:
-        const maybeLabel = it?.label ?? it?.titre ?? it?.text ?? it?.name;
-        const decodedLabel =
-          typeof maybeLabel === 'string' ? b64decodeSafe(maybeLabel) ?? maybeLabel : decoded;
-        out.items.push({ base64: b64, label: decodedLabel });
-      }
-    }
-    if (out.items.length) return out;
-  }
-
-  // Fallback agressif: fouille tout l'objet pour trouver un tableau plausible de b64
-  const stack: any[] = [root];
-  while (stack.length) {
-    const cur = stack.pop();
-    if (!cur) continue;
-
-    if (Array.isArray(cur)) {
-      if (cur.length > 0) {
-        if (typeof cur[0] === 'string') {
-          for (const s of cur as string[]) {
-            const t = (s || '').trim();
-            if (t) out.items.push({ base64: t, label: b64decodeSafe(t) });
-          }
-          if (out.items.length) return out;
-        } else if (typeof cur[0] === 'object' && cur[0] !== null) {
-          for (const it of cur) {
-            const b64 = it?.choix ?? it?.value ?? it?.val ?? it?.id ?? it?.key ?? '';
-            if (typeof b64 === 'string' && b64) {
-              const decoded = b64decodeSafe(b64);
-              const maybeLabel = it?.label ?? it?.titre ?? it?.text ?? it?.name;
-              const decodedLabel =
-                typeof maybeLabel === 'string' ? b64decodeSafe(maybeLabel) ?? maybeLabel : decoded;
-              out.items.push({ base64: b64, label: decodedLabel });
-            } else {
-              stack.push(it);
-            }
-          }
-          if (out.items.length) return out;
-        } else {
-          for (const it of cur) stack.push(it);
+      for (const s of arr) if (s) out.items.push({ base64: s, label: b64decodeSafe(s) });
+    } else {
+      for (const it of arr) {
+        const b64 = it?.choix ?? it?.value ?? it?.val ?? it?.id ?? it?.key ?? '';
+        if (typeof b64 === 'string' && b64) {
+          const maybeLabel = it?.label ?? it?.titre ?? it?.text ?? it?.name;
+          const decodedLabel =
+            typeof maybeLabel === 'string'
+              ? b64decodeSafe(maybeLabel) ?? maybeLabel
+              : b64decodeSafe(b64);
+          out.items.push({ base64: b64, label: decodedLabel });
         }
       }
-      continue;
-    }
-
-    if (typeof cur === 'object') {
-      // attrape question si on la croise ailleurs
-      if (!out.decodedQuestion && typeof cur.question === 'string') {
-        out.decodedQuestion = b64decodeSafe(cur.question) ?? cur.question;
-      }
-      for (const v of Object.values(cur)) {
-        if (v && (typeof v === 'object' || Array.isArray(v))) stack.push(v);
-      }
     }
   }
-
   return out;
 }
 
@@ -147,6 +73,7 @@ export default function QcmPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rawStart, setRawStart] = useState<any>(null);
+  const [rawAnswer, setRawAnswer] = useState<any>(null);
 
   const [question, setQuestion] = useState<string | undefined>(undefined);
   const [propositions, setPropositions] = useState<Array<{ base64: string; label?: string }>>([]);
@@ -165,9 +92,7 @@ export default function QcmPage() {
       setPassword(sessionStorage.getItem('ed_password'));
       setCookieHeader(sessionStorage.getItem('ed_cookie'));
       setGtk(sessionStorage.getItem('ed_gtk'));
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, []);
 
   const extracted = useMemo(() => {
@@ -180,9 +105,10 @@ export default function QcmPage() {
     setPropositions(extracted.items);
   }, [extracted]);
 
+  // Récupère la question
   useEffect(() => {
     (async () => {
-      if (!tempToken) return; // attend que le state soit rempli
+      if (!tempToken) return;
       setLoading(true);
       setError(null);
 
@@ -197,9 +123,7 @@ export default function QcmPage() {
         });
 
         const json: StartResp = await res.json();
-        if (!json.ok) {
-          throw new Error(`QCM start a échoué (status ${json.status})`);
-        }
+        if (!json.ok) throw new Error(`QCM start a échoué (status ${json.status})`);
 
         setRawStart(json);
 
@@ -219,7 +143,8 @@ export default function QcmPage() {
     })();
   }, [tempToken, cookieHeader]);
 
-  async function submitChoix(base64Choix: string) {
+  // Soumission d’un choix
+  async function submitChoix(choiceBase64: string) {
     setLoading(true);
     setError(null);
 
@@ -230,43 +155,51 @@ export default function QcmPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token: tempToken,
-          choix: base64Choix, // IMPORTANT: on renvoie la valeur base64
+          choix: choiceBase64, // NE PAS MODIFIER
           cookieHeader: cookieHeader || undefined,
         }),
       });
       const json: AnswerResp = await res.json();
+      setRawAnswer(json);
       if (!json.ok) throw new Error(`QCM answer échoué (status ${json.status})`);
 
       // 1) Token direct ?
-      const directToken = json.data?.token || json.data?.data?.token || undefined;
-
-      if (directToken) {
+      const directToken = json.data?.token || json.data?.data?.token;
+      if (typeof directToken === 'string' && directToken) {
         sessionStorage.setItem('ed_token', directToken);
         sessionStorage.setItem('ed_login_data', JSON.stringify(json.data ?? {}));
         cleanupTemp();
-        router.push('/dashboard');
-        return;
+        return router.push('/ed/eleves');
       }
 
-      const raw = json.data?.data ?? json.data;
+      // 2) Relogin avec fa (cn/cv) — UTILISER LES VALEURS TELLES QUELLES
+      const root = json.data?.data ?? json.data;
+      let faRaw: Array<{ cn: string; cv: string }> = [];
 
-      // 2) Relogin avec fa (cn/cv)
-      let fa: Array<{ cn: string; cv: string }> = [];
-      if (Array.isArray(raw?.fa) && raw.fa.length) {
-        fa = raw.fa
-          .map((x: any) => ({ cn: String(x.cn ?? ''), cv: String(x.cv ?? '') }))
-          .filter((x) => x.cn && x.cv);
-      } else if (raw?.cn && raw?.cv) {
-        fa = [{ cn: String(raw.cn), cv: String(raw.cv) }];
+      if (Array.isArray(root?.fa) && root.fa.length) {
+        faRaw = root.fa
+          .map((x: any) => {
+            const cn = String(x?.cn ?? '');
+            const cv = String(x?.cv ?? '');
+            return cn && cv ? { cn, cv } : null;
+          })
+          .filter(Boolean) as Array<{ cn: string; cv: string }>;
+      } else if (root?.cn && root?.cv) {
+        faRaw = [{ cn: String(root.cn), cv: String(root.cv) }];
       }
 
-      if (!fa.length) {
+      if (!faRaw.length)
         throw new Error("Réponse QCM inattendue: ni token direct, ni 'fa' (cn/cv).");
-      }
-
-      if (!username || !password || !gtk) {
+      if (!username || !password || !gtk)
         throw new Error('Identifiants ou GTK manquants pour relancer le login après QCM.');
-      }
+
+      // Log client (debug)
+      console.log('[QCM] Relog /api/ed/login', {
+        hasUser: !!username,
+        hasPwd: !!password,
+        hasGtk: !!gtk,
+        faCount: faRaw.length,
+      });
 
       const relog = await fetch('/api/ed/login', {
         method: 'POST',
@@ -276,7 +209,7 @@ export default function QcmPage() {
           password,
           gtk,
           cookieHeader: cookieHeader || undefined,
-          fa,
+          fa: faRaw, // RAW, sans nettoyage
         }),
       });
 
@@ -288,15 +221,13 @@ export default function QcmPage() {
         );
       }
 
-      const finalToken = relogJson.token || relogJson.data?.token || undefined;
-      if (!finalToken) {
-        throw new Error('Token introuvable après relogin QCM.');
-      }
+      const finalToken = relogJson.token || relogJson.data?.token;
+      if (!finalToken) throw new Error('Token introuvable après relogin QCM.');
 
       sessionStorage.setItem('ed_token', finalToken);
       sessionStorage.setItem('ed_login_data', JSON.stringify(relogJson.data ?? {}));
       cleanupTemp();
-      router.push('/dashboard');
+      router.push('/ed/eleves');
     } catch (e: any) {
       setError(e?.message || 'Erreur lors de la soumission du QCM.');
     } finally {
@@ -311,9 +242,7 @@ export default function QcmPage() {
       sessionStorage.removeItem('ed_password');
       sessionStorage.removeItem('ed_cookie');
       sessionStorage.removeItem('ed_gtk');
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   return (
@@ -321,12 +250,11 @@ export default function QcmPage() {
       <div className="max-w-xl mx-auto space-y-6">
         <header>
           <h1 className="text-2xl font-semibold">Double authentification (QCM)</h1>
-          {question && (
+          {question ? (
             <p className="text-sm text-gray-700 mt-2">
               <span className="font-medium">Question :</span> <span>{question}</span>
             </p>
-          )}
-          {!question && (
+          ) : (
             <p className="text-sm text-gray-500 mt-2">
               La question n’a pas été fournie (ou n’était pas encodée en base64).
             </p>
@@ -358,14 +286,29 @@ export default function QcmPage() {
           </section>
         )}
 
-        {/* Bloc debug pliable pour voir la réponse brute */}
+        {/* Debug: réponses brutes */}
         {!loading && (
-          <details className="rounded-2xl border p-4">
-            <summary className="cursor-pointer text-sm">Debug : réponse /start (JSON brut)</summary>
-            <pre className="text-xs overflow-auto mt-3 bg-gray-50 p-3 rounded-xl">
-              {JSON.stringify(rawStart, null, 2)}
-            </pre>
-          </details>
+          <>
+            <details className="rounded-2xl border p-4">
+              <summary className="cursor-pointer text-sm">
+                Debug : réponse /start (JSON brut)
+              </summary>
+              <pre className="text-xs overflow-auto mt-3 bg-gray-50 p-3 rounded-xl">
+                {JSON.stringify(rawStart, null, 2)}
+              </pre>
+            </details>
+
+            {rawAnswer && (
+              <details className="rounded-2xl border p-4">
+                <summary className="cursor-pointer text-sm">
+                  Debug : réponse /answer (JSON brut)
+                </summary>
+                <pre className="text-xs overflow-auto mt-3 bg-gray-50 p-3 rounded-xl">
+                  {JSON.stringify(rawAnswer, null, 2)}
+                </pre>
+              </details>
+            )}
+          </>
         )}
       </div>
     </main>

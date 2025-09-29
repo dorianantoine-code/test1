@@ -1,45 +1,92 @@
 // app/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-type LoginData = {
-  account?: any;
-  accounts?: any[];
-  token?: string;
-};
+type LoginData = { account?: any; accounts?: any[]; token?: string };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [loginData, setLoginData] = useState<LoginData | null>(null);
+
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const t = sessionStorage.getItem('ed_token');
       const d = sessionStorage.getItem('ed_login_data');
+      const sid = sessionStorage.getItem('ed_selected_eleve_id');
+      const sname = sessionStorage.getItem('ed_selected_eleve_name');
+      const sphoto = sessionStorage.getItem('ed_selected_eleve_photo');
       setToken(t);
       setLoginData(d ? JSON.parse(d) : null);
+      setSelectedId(sid ? Number(sid) : null);
+      setSelectedName(sname || null);
+      setSelectedPhoto(sphoto || null);
     } catch {}
   }, []);
 
-  // JSON "colorisé" pour meilleure lisibilité
+  // Si pas loggé → page login
+  useEffect(() => {
+    if (token === null) return;
+    if (!token) router.replace('/');
+  }, [token, router]);
+
+  // Si élève non sélectionné → page de sélection
+  useEffect(() => {
+    if (selectedId === null) return; // attend le chargement
+    if (!selectedId) router.replace('/ed/eleves');
+  }, [selectedId, router]);
+
   function prettyPrintJson(obj: any) {
     if (!obj) return '';
     const json = JSON.stringify(obj, null, 2);
     return json
-      .replace(/"(.*?)":/g, '<span class="text-blue-400">"$1"</span>:') // clés
-      .replace(/: "(.*?)"/g, ': <span class="text-green-300">"$1"</span>') // strings
-      .replace(/: (\d+)/g, ': <span class="text-purple-300">$1</span>') // nombres
-      .replace(/: (true|false)/g, ': <span class="text-orange-300">$1</span>'); // booléens
+      .replace(/"(.*?)":/g, '<span class="text-blue-400">"$1"</span>:')
+      .replace(/: "(.*?)"/g, ': <span class="text-green-300">"$1"</span>')
+      .replace(/: (\d+)/g, ': <span class="text-purple-300">$1</span>')
+      .replace(/: (true|false)/g, ': <span class="text-orange-300">$1</span>');
+  }
+
+  const headerText = useMemo(() => {
+    if (selectedId && selectedName) return `Dashboard — Élève ${selectedName} (#${selectedId})`;
+    if (selectedId) return `Dashboard — Élève #${selectedId}`;
+    return 'Dashboard';
+  }, [selectedId, selectedName]);
+
+  function photoUrl(src?: string | null) {
+    if (!src) return undefined;
+    if (src.startsWith('//')) return 'https:' + src;
+    return src;
   }
 
   return (
     <main className="min-h-screen p-6 md:p-10">
       <div className="max-w-3xl mx-auto space-y-6">
-        <header className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <header className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
+            {selectedPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={photoUrl(selectedPhoto)}
+                alt={selectedName || 'Élève'}
+                className="h-10 w-10 rounded-full border border-white/40"
+              />
+            ) : null}
+            <h1 className="text-2xl font-semibold tracking-tight text-white">{headerText}</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/ed/eleves"
+              className="rounded-xl border px-4 py-2 text-white border-white/40 hover:bg-white/10"
+            >
+              Changer d’élève
+            </Link>
             <Link href="/ed/agenda" className="rounded-xl border px-4 py-2 hover:bg-gray-50">
               Agenda
             </Link>
@@ -70,6 +117,14 @@ export default function DashboardPage() {
                   <span className="font-semibold">X-Token:</span>{' '}
                   <span className="select-all">{token}</span>
                 </div>
+                {selectedId ? (
+                  <div className="mb-2 font-mono">
+                    <span className="font-semibold">Élève sélectionné:</span>{' '}
+                    <span className="select-all">
+                      #{selectedId} {selectedName ? `(${selectedName})` : ''}
+                    </span>
+                  </div>
+                ) : null}
               </div>
               <div className="text-sm text-gray-500">
                 Le token ci-dessus doit être envoyé dans <code>X-Token</code> sur toutes les

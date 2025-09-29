@@ -63,19 +63,25 @@ export default function LoginPage() {
         throw new Error(loginJson.message || `Login échoué (status ${loginJson.status})`);
       }
 
-      // 200 => OK: stocker token + payload et aller au dashboard
+      // 200 => OK: stocker token + payload et aller à la sélection d'élève
       if (loginJson.code === 200) {
         const token = loginJson.token || loginJson.data?.token;
         if (!token) throw new Error('Token absent dans la réponse (200).');
+
         sessionStorage.setItem('ed_token', token);
         sessionStorage.setItem('ed_login_data', JSON.stringify(loginJson.data ?? {}));
-        router.push('/dashboard');
+
+        // On force une nouvelle sélection d'élève à chaque login
+        sessionStorage.removeItem('ed_selected_eleve_id');
+        sessionStorage.removeItem('ed_selected_eleve_name');
+        sessionStorage.removeItem('ed_selected_eleve_photo');
+
+        router.push('/ed/eleves');
         return;
       }
 
       // 250 => QCM: sauvegarde du contexte et go /ed/qcm
       if (loginJson.code === 250) {
-        // Token temporaire à utiliser pour /doubleauth
         const tempToken = loginJson.token || loginJson.data?.token;
         if (!tempToken) {
           throw new Error('Token temporaire absent (code 250).');
