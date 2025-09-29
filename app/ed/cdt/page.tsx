@@ -57,7 +57,6 @@ function sanitizeHtmlBasic(html?: string): string {
 
 type DevoirLight = {
   matiere: string;
-  codeMatiere: string;
   idDevoir: number;
   donneLe?: string;
   effectue?: boolean;
@@ -72,7 +71,6 @@ type DayDetail = {
     entityLibelle: string;
     entityType: string;
     matiere: string;
-    codeMatiere: string;
     nomProf: string;
     id: number; // = idDevoir
     interrogation: boolean;
@@ -253,15 +251,21 @@ export default function CdtPage() {
       <div className="max-w-5xl mx-auto space-y-6">
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">Cahier de texte</h1>
-            <p className="text-sm text-gray-500">{headerEleve}</p>
+            <h1 className="text-2xl font-semibold text-black">Cahier de texte</h1>
+            <p className="text-sm text-gray-700">{headerEleve}</p>
           </div>
-          <Link href="/dashboard" className="rounded-xl border px-4 py-2 hover:bg-gray-50">
+          <Link
+            href="/dashboard"
+            className="rounded-xl border px-4 py-2 hover:bg-gray-50 text-black border-gray-300"
+          >
             ← Retour
           </Link>
         </header>
 
-        <form onSubmit={loadCdt} className="rounded-2xl border p-4 flex items-center gap-3">
+        <form
+          onSubmit={loadCdt}
+          className="rounded-2xl border p-4 flex items-center gap-3 border-gray-300"
+        >
           <button
             type="submit"
             disabled={loading || !eleveId}
@@ -270,41 +274,41 @@ export default function CdtPage() {
           >
             {loading ? 'Chargement…' : 'Recharger'}
           </button>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-700">
             Liste des devoirs à faire à partir d’aujourd’hui (groupés par date).
           </span>
         </form>
 
         {error && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-2xl border border-red-500 bg-red-100 p-3 text-sm text-red-900">
             {error}
           </div>
         )}
 
-        {/* LISTE LISIBLE */}
-        <section className="rounded-2xl border p-4 space-y-4">
-          <h2 className="text-lg font-medium">À faire (lisible)</h2>
+        {/* LISTE CONTRASTÉE */}
+        <section className="rounded-2xl border p-4 space-y-4 border-gray-300">
+          <h2 className="text-lg font-semibold text-black">Cahier de texte</h2>
 
           {itemsByDate.length === 0 && !loading && (
-            <div className="text-sm text-gray-500">Aucun devoir à venir.</div>
+            <div className="text-sm text-gray-800">Aucun devoir à venir.</div>
           )}
 
           <div className="space-y-4">
             {itemsByDate.map(({ date, list }) => (
-              <div key={date} className="border rounded-xl">
+              <div key={date} className="border rounded-xl border-gray-300 bg-white">
                 <button
                   type="button"
-                  className="w-full text-left px-4 py-3 flex items-center justify-between"
+                  className="w-full text-left px-4 py-3 flex items-center justify-between text-black"
                   onClick={() => toggleDay(date)}
                 >
-                  <span className="font-medium">
+                  <span className="font-semibold">
                     {new Date(date).toLocaleDateString('fr-FR', {
                       weekday: 'long',
                       day: '2-digit',
                       month: 'long',
                     })}
                   </span>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-800">
                     {list.length} élément{list.length > 1 ? 's' : ''}
                   </span>
                 </button>
@@ -314,35 +318,30 @@ export default function CdtPage() {
                   {list.map((d) => (
                     <div
                       key={`${date}-${d.idDevoir}`}
-                      className="rounded-lg border p-3 flex flex-col gap-1 bg-gray-50"
+                      className="rounded-lg border p-3 flex flex-col gap-1 bg-white text-black border-gray-300"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">{d.matiere}</span>
-                        <span className="text-xs rounded-full bg-gray-200 px-2 py-0.5">
-                          {d.codeMatiere}
-                        </span>
+                        <span className="text-sm font-semibold">{d.matiere}</span>
                         {d.interrogation ? (
-                          <span className="text-xs rounded-full bg-amber-200 px-2 py-0.5">
+                          <span className="text-xs rounded-full bg-yellow-300 text-black px-2 py-0.5">
                             Interrogation
                           </span>
                         ) : null}
                         {d.rendreEnLigne ? (
-                          <span className="text-xs rounded-full bg-indigo-200 px-2 py-0.5">
+                          <span className="text-xs rounded-full bg-indigo-300 text-black px-2 py-0.5">
                             Rendu en ligne
                           </span>
                         ) : null}
-                        {d.effectue ? (
-                          <span className="text-xs rounded-full bg-emerald-200 px-2 py-0.5">
-                            Effectué
-                          </span>
-                        ) : (
-                          <span className="text-xs rounded-full bg-rose-200 px-2 py-0.5">
-                            À faire
-                          </span>
-                        )}
+                        <span
+                          className={`text-xs rounded-full px-2 py-0.5 ${
+                            d.effectue ? 'bg-emerald-300' : 'bg-rose-300'
+                          } text-black`}
+                        >
+                          {d.effectue ? 'Effectué' : 'À faire'}
+                        </span>
                       </div>
                       {d.donneLe && (
-                        <div className="text-xs text-gray-600">
+                        <div className="text-xs text-gray-800">
                           Donné le <b>{new Date(d.donneLe).toLocaleDateString('fr-FR')}</b>
                         </div>
                       )}
@@ -352,10 +351,10 @@ export default function CdtPage() {
 
                 {/* détails jour */}
                 {openDate === date && (
-                  <div className="border-t px-4 py-4 space-y-4">
-                    {dayLoading && <div className="text-sm">Chargement du détail…</div>}
+                  <div className="border-t px-4 py-4 space-y-4 border-gray-200">
+                    {dayLoading && <div className="text-sm text-black">Chargement du détail…</div>}
                     {dayError && (
-                      <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      <div className="rounded-lg border border-red-500 bg-red-100 p-3 text-sm text-red-900">
                         {dayError}
                       </div>
                     )}
@@ -368,15 +367,15 @@ export default function CdtPage() {
                             b64decodeHtml(m.contenuDeSeance?.contenu),
                           );
                           return (
-                            <div key={m.id} className="rounded-lg border p-4">
+                            <div
+                              key={m.id}
+                              className="rounded-lg border p-4 bg-white text-black border-gray-300"
+                            >
                               <div className="flex flex-wrap items-center gap-2 mb-2">
-                                <div className="font-medium">{m.matiere}</div>
-                                <span className="text-xs rounded-full bg-gray-200 px-2 py-0.5">
-                                  {m.codeMatiere}
-                                </span>
-                                <span className="text-xs text-gray-500">{m.nomProf}</span>
+                                <div className="font-semibold">{m.matiere}</div>
+                                <span className="text-sm text-gray-800">{m.nomProf}</span>
                                 {m.interrogation ? (
-                                  <span className="text-xs rounded-full bg-amber-200 px-2 py-0.5">
+                                  <span className="text-xs rounded-full bg-yellow-300 text-black px-2 py-0.5">
                                     Interrogation
                                   </span>
                                 ) : null}
@@ -384,9 +383,11 @@ export default function CdtPage() {
 
                               {aFaireHtml && (
                                 <div className="mb-2">
-                                  <div className="text-sm font-medium mb-1">Travail à faire</div>
+                                  <div className="text-sm font-semibold mb-1 text-black">
+                                    Travail à faire
+                                  </div>
                                   <div
-                                    className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1"
+                                    className="text-sm leading-relaxed text-black"
                                     dangerouslySetInnerHTML={{ __html: aFaireHtml }}
                                   />
                                 </div>
@@ -394,17 +395,18 @@ export default function CdtPage() {
 
                               {m.aFaire?.documents?.length ? (
                                 <div className="mb-2">
-                                  <div className="text-sm font-medium mb-1">Pièces jointes</div>
-                                  <ul className="list-disc pl-5 text-sm">
+                                  <div className="text-sm font-semibold mb-1 text-black">
+                                    Pièces jointes
+                                  </div>
+                                  <ul className="list-disc pl-5 text-sm text-black">
                                     {m.aFaire.documents.map((f) => (
                                       <li key={f.id}>
                                         {f.libelle}{' '}
-                                        <span className="text-gray-500 text-xs">
+                                        <span className="text-gray-800 text-xs">
                                           ({Math.round(f.taille / 1024)} Ko)
                                         </span>
                                         {/* Pour le téléchargement, on pourra ajouter un proxy:
-                                            /api/ed/download?type=FICHIER_CDT&id={f.id}
-                                            (voir doc telechargement) */}
+                                            /api/ed/download?type=FICHIER_CDT&id={f.id} */}
                                       </li>
                                     ))}
                                   </ul>
@@ -413,9 +415,11 @@ export default function CdtPage() {
 
                               {seanceHtml && (
                                 <div className="mt-2">
-                                  <div className="text-sm font-medium mb-1">Contenu de séance</div>
+                                  <div className="text-sm font-semibold mb-1 text-black">
+                                    Contenu de séance
+                                  </div>
                                   <div
-                                    className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1"
+                                    className="text-sm leading-relaxed text-black"
                                     dangerouslySetInnerHTML={{ __html: seanceHtml }}
                                   />
                                 </div>
@@ -433,8 +437,8 @@ export default function CdtPage() {
         </section>
 
         {/* Réponse brute (debug) */}
-        <section className="rounded-2xl border p-6 space-y-3">
-          <h2 className="text-lg font-medium">Réponse brute</h2>
+        <section className="rounded-2xl border p-6 space-y-3 border-gray-300">
+          <h2 className="text-lg font-semibold text-black">Réponse brute</h2>
           <pre className="text-xs overflow-auto p-4 rounded-xl bg-gray-900 text-gray-100 font-mono leading-relaxed border border-gray-700">
             {JSON.stringify(raw, null, 2)}
           </pre>
