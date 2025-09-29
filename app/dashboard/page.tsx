@@ -43,6 +43,9 @@ export default function DashboardPage() {
             <Link href="/ed/agenda" className="rounded-xl border px-4 py-2 hover:bg-gray-50">
               Agenda
             </Link>
+            <Link href="/ed/cdt" className="rounded-xl border px-4 py-2 hover:bg-gray-50">
+              Cahier de texte
+            </Link>
             <Link href="/" className="rounded-xl border px-4 py-2 hover:bg-gray-50">
               Déconnexion
             </Link>
