@@ -3,7 +3,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 type LoginData = {
   account?: any;
@@ -12,7 +11,6 @@ type LoginData = {
 };
 
 export default function DashboardPage() {
-  const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [loginData, setLoginData] = useState<LoginData | null>(null);
 
@@ -25,15 +23,15 @@ export default function DashboardPage() {
     } catch {}
   }, []);
 
-  // Fonction de coloration JSON (simple regexes)
+  // JSON "colorisé" pour meilleure lisibilité
   function prettyPrintJson(obj: any) {
     if (!obj) return '';
     const json = JSON.stringify(obj, null, 2);
     return json
-      .replace(/"(.*?)":/g, '<span class="text-blue-600">"$1"</span>:') // clés
-      .replace(/: "(.*?)"/g, ': <span class="text-green-700">"$1"</span>') // valeurs string
-      .replace(/: (\d+)/g, ': <span class="text-purple-700">$1</span>') // nombres
-      .replace(/: (true|false)/g, ': <span class="text-orange-600">$1</span>'); // booléens
+      .replace(/"(.*?)":/g, '<span class="text-blue-400">"$1"</span>:') // clés
+      .replace(/: "(.*?)"/g, ': <span class="text-green-300">"$1"</span>') // strings
+      .replace(/: (\d+)/g, ': <span class="text-purple-300">$1</span>') // nombres
+      .replace(/: (true|false)/g, ': <span class="text-orange-300">$1</span>'); // booléens
   }
 
   return (
@@ -42,6 +40,9 @@ export default function DashboardPage() {
         <header className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <div className="flex items-center gap-3">
+            <Link href="/ed/agenda" className="rounded-xl border px-4 py-2 hover:bg-gray-50">
+              Agenda
+            </Link>
             <Link href="/" className="rounded-xl border px-4 py-2 hover:bg-gray-50">
               Déconnexion
             </Link>
@@ -77,9 +78,7 @@ export default function DashboardPage() {
               <h2 className="text-lg font-medium">Infos compte (si renvoyées)</h2>
               <pre
                 className="text-xs overflow-auto p-4 rounded-xl bg-gray-900 text-gray-100 font-mono leading-relaxed border border-gray-700"
-                dangerouslySetInnerHTML={{
-                  __html: prettyPrintJson(loginData),
-                }}
+                dangerouslySetInnerHTML={{ __html: prettyPrintJson(loginData) }}
               />
             </section>
           </>

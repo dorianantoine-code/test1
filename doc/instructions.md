@@ -1,6 +1,7 @@
+cd "/Users/dorianantoine/Library/CloudStorage/GoogleDrive-dorianantoine@gmail.com/Mon Drive/dev/test1"
+
 token git : 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
 
-cd "/Users/dorianantoine/Library/CloudStorage/GoogleDrive-dorianantoine@gmail.com/Mon Drive/dev/test1"
 export ED_DEBUG=1
 NEXT_DISABLE_TURBOPACK=1 pnpm dev
 
