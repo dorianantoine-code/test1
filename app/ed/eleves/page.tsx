@@ -9,7 +9,7 @@ type Eleve = {
   id: number;
   prenom?: string;
   nom?: string;
-  photo?: string; // peut être //doc1.... -> on préfixera https:
+  photo?: string; // souvent //doc1.ecoledirecte.com/PhotoEleves/...
 };
 
 export default function ElevesPage() {
@@ -26,7 +26,7 @@ export default function ElevesPage() {
     } catch {}
   }, []);
 
-  // Extrait tous les élèves de tous les comptes
+  // Extrait tous les élèves
   const eleves: Eleve[] = useMemo(() => {
     const root = loginData?.data ?? loginData;
     const accs: any[] = root?.accounts ?? [];
@@ -35,27 +35,30 @@ export default function ElevesPage() {
       const arr = a?.profile?.eleves ?? [];
       for (const e of arr) {
         if (e && typeof e.id === 'number') {
-          list.push({
-            id: e.id,
-            prenom: e.prenom,
-            nom: e.nom,
-            photo: e.photo,
-          });
+          list.push({ id: e.id, prenom: e.prenom, nom: e.nom, photo: e.photo });
         }
       }
     }
-    // déduplique par id
     const map = new Map<number, Eleve>();
     for (const e of list) map.set(e.id, e);
     return Array.from(map.values());
   }, [loginData]);
 
-  function photoUrl(src?: string) {
+  // URL absolue depuis //… ou http(s)…
+  function absolutePhoto(src?: string) {
     if (!src) return undefined;
     if (src.startsWith('//')) return 'https:' + src;
-    if (src.startsWith('/')) return src;
-    if (src.startsWith('http')) return src;
     return src;
+  }
+
+  // Passe par notre proxy pour éviter CORP/CORS
+  function proxiedPhoto(src?: string) {
+    const abs = absolutePhoto(src);
+    if (!abs) return undefined;
+    if (abs.startsWith('http')) {
+      return `/api/ed/img?u=${encodeURIComponent(abs)}`;
+    }
+    return abs;
   }
 
   function selectEleve(eleve: Eleve) {
@@ -65,15 +68,15 @@ export default function ElevesPage() {
         'ed_selected_eleve_name',
         [eleve.prenom, eleve.nom].filter(Boolean).join(' '),
       );
-      if (eleve.photo)
-        sessionStorage.setItem('ed_selected_eleve_photo', photoUrl(eleve.photo) || '');
+      const abs = absolutePhoto(eleve.photo);
+      if (abs) sessionStorage.setItem('ed_selected_eleve_photo', abs);
     } catch {}
     router.push('/dashboard');
   }
 
   // Si pas loggé → retour login
   useEffect(() => {
-    if (token === null) return; // attend le chargement
+    if (token === null) return;
     if (!token) router.replace('/');
   }, [token, router]);
 
@@ -116,18 +119,17 @@ export default function ElevesPage() {
                   onClick={() => selectEleve(e)}
                   className="group rounded-xl border border-gray-300 bg-white hover:shadow-md transition p-3 flex flex-col items-center gap-2"
                 >
-                  <div className="h-24 w-24 rounded-full overflow-hidden border border-gray-300">
+                  <div className="h-24 w-24 rounded-full overflow-hidden border border-gray-300 bg-gray-100">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={photoUrl(e.photo) || '/placeholder-avatar.png'}
+                      src={proxiedPhoto(e.photo) || '/placeholder-avatar.png'}
                       alt={e.prenom || 'Élève'}
                       className="h-full w-full object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
                     />
                   </div>
-                  <div className="text-sm font-medium text-black">
-                    {e.prenom || 'Élève'}
-                    {/* on n'affiche que le prénom comme demandé */}
-                  </div>
+                  <div className="text-sm font-medium text-black">{e.prenom || 'Élève'}</div>
                 </button>
               ))}
             </div>

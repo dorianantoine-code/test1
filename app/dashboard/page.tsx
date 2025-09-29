@@ -31,17 +31,28 @@ export default function DashboardPage() {
     } catch {}
   }, []);
 
-  // Si pas loggé → page login
+  // Redirections
   useEffect(() => {
     if (token === null) return;
     if (!token) router.replace('/');
   }, [token, router]);
 
-  // Si élève non sélectionné → page de sélection
   useEffect(() => {
-    if (selectedId === null) return; // attend le chargement
+    if (selectedId === null) return;
     if (!selectedId) router.replace('/ed/eleves');
   }, [selectedId, router]);
+
+  function absolutePhoto(src?: string | null) {
+    if (!src) return undefined;
+    if (src.startsWith('//')) return 'https:' + src;
+    return src;
+  }
+  function proxiedPhoto(src?: string | null) {
+    const abs = absolutePhoto(src || undefined);
+    if (!abs) return undefined;
+    if (abs.startsWith('http')) return `/api/ed/img?u=${encodeURIComponent(abs)}`;
+    return abs;
+  }
 
   function prettyPrintJson(obj: any) {
     if (!obj) return '';
@@ -59,12 +70,6 @@ export default function DashboardPage() {
     return 'Dashboard';
   }, [selectedId, selectedName]);
 
-  function photoUrl(src?: string | null) {
-    if (!src) return undefined;
-    if (src.startsWith('//')) return 'https:' + src;
-    return src;
-  }
-
   return (
     <main className="min-h-screen p-6 md:p-10">
       <div className="max-w-3xl mx-auto space-y-6">
@@ -73,9 +78,11 @@ export default function DashboardPage() {
             {selectedPhoto ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={photoUrl(selectedPhoto)}
+                src={proxiedPhoto(selectedPhoto)}
                 alt={selectedName || 'Élève'}
-                className="h-10 w-10 rounded-full border border-white/40"
+                className="h-10 w-10 rounded-full border border-white/40 bg-white/20 object-cover"
+                loading="lazy"
+                referrerPolicy="no-referrer"
               />
             ) : null}
             <h1 className="text-2xl font-semibold tracking-tight text-white">{headerText}</h1>
