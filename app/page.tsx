@@ -3,6 +3,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { upsertFromEdResponse } from './lib/ed/upsertClient'; // ⟵ chemin RELATIF
 
 type GtkResponse = {
   ok: boolean;
@@ -56,12 +57,16 @@ export default function LoginPage() {
           cookieHeader: gtkJson.cookieHeader,
         }),
       });
-
+      console.warn('[UpsertClient] avant lancement');
       const loginJson: LoginResponse = await loginRes.json();
+      console.warn('[UpsertClient] aprs lancement');
 
       if (!loginJson.ok) {
         throw new Error(loginJson.message || `Login échoué (status ${loginJson.status})`);
       }
+
+      // ➜ INSERT/UPDATE SUPABASE
+      await upsertFromEdResponse(loginJson);
 
       // 200 => OK: stocker token + payload et aller à la sélection d'élève
       if (loginJson.code === 200) {

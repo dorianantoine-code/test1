@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { upsertFromEdResponse } from '../../lib/ed/upsertClient'; // chemin RELATIF
 
 type StartResp = { ok: boolean; status: number; data: any };
 type AnswerResp = { ok: boolean; status: number; data: any };
@@ -163,12 +164,20 @@ export default function QcmPage() {
       setRawAnswer(json);
       if (!json.ok) throw new Error(`QCM answer échoué (status ${json.status})`);
 
+      console.warn('[QCM] Upsert 1/2 → depuis réponse /answer');
+      await upsertFromEdResponse(json); // <-- upsert #1 (si la réponse contient account)
+      console.warn('[QCM] Upsert 1/2 terminé');
+
       // 1) Token direct ?
       const directToken = json.data?.token || json.data?.data?.token;
       if (typeof directToken === 'string' && directToken) {
         sessionStorage.setItem('ed_token', directToken);
         sessionStorage.setItem('ed_login_data', JSON.stringify(json.data ?? {}));
         cleanupTemp();
+
+        // par sûreté: upsert (au cas où la structure soit différente ici)
+        console.warn('[QCM] Upsert sécurité après token direct (2/2)');
+        await upsertFromEdResponse(json); // <-- upsert #2 fallback
         return router.push('/ed/eleves');
       }
 
@@ -223,6 +232,11 @@ export default function QcmPage() {
 
       const finalToken = relogJson.token || relogJson.data?.token;
       if (!finalToken) throw new Error('Token introuvable après relogin QCM.');
+
+      // ➜ Upsert après relogin (réponse login standard contient quasi toujours "accounts")
+      console.warn('[QCM] Upsert 2/2 → depuis réponse relogin');
+      await upsertFromEdResponse(relogJson); // <-- upsert #2 (fortement probable)
+      console.warn('[QCM] Upsert 2/2 terminé');
 
       sessionStorage.setItem('ed_token', finalToken);
       sessionStorage.setItem('ed_login_data', JSON.stringify(relogJson.data ?? {}));
