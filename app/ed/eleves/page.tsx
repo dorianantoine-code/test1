@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import styles from '../../styles/readable.module.css';
+import { upsertSelectedEleve } from '../../lib/ed/eleveUpsertClient';
 
 type Eleve = {
   id: number;
@@ -62,15 +63,18 @@ export default function ElevesPage() {
     return abs;
   }
 
-  function selectEleve(eleve: Eleve) {
+  async function selectEleve(eleve: Eleve) {
     try {
-      sessionStorage.setItem('ed_selected_eleve_id', String(eleve.id));
+      // 1) ta logique existante : stocker l'élève en session, etc.
+      sessionStorage.setItem('ed_selected_eleve_id', String(eleve?.id ?? eleve?.idEleve ?? ''));
       sessionStorage.setItem(
         'ed_selected_eleve_name',
-        [eleve.prenom, eleve.nom].filter(Boolean).join(' '),
+        eleve?.prenom ? `${eleve.prenom} ${eleve.nom ?? ''}`.trim() : eleve?.nom ?? '',
       );
-      const abs = absolutePhoto(eleve.photo);
-      if (abs) sessionStorage.setItem('ed_selected_eleve_photo', abs);
+      if (eleve?.photo) sessionStorage.setItem('ed_selected_eleve_photo', eleve.photo);
+
+      // 2) upsert Supabase (non bloquant pour l'UX si tu veux)
+      await upsertSelectedEleve(eleve); // passe ed_account_id en 2e param si tu l'as
     } catch {}
     router.push('/dashboard');
   }
