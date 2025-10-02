@@ -1,0 +1,105 @@
+/* ——— Header Élève : lisible, mobile-friendly ——— */
+
+.readable .pageHeader {
+  background: #ffffff;
+  border: 1px solid #e2e8f0; /* slate-200 */
+  border-radius: 0.75rem; /* rounded-xl */
+  padding: 0.75rem 1rem; /* py-3 px-4 */
+  margin-bottom: 1rem; /* mb-4 */
+}
+
+.readable .pageHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.readable .pageHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0; /* pour truncate */
+}
+
+.readable .avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  object-fit: cover;
+  background: #e2e8f0;
+  border: 2px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.readable .avatarFallback {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  background: #0f172a; /* slate-900 */
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border: 2px solid #e2e8f0;
+}
+
+.readable .studentName {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Menu déroulant (simple, accessible, mobile-ready) */
+.readable .menuRoot {
+  position: relative;
+}
+
+.readable .menuButton {
+  color: #ffffff !important;
+  background-color: #111827 !important; /* slate-900 */
+  border: 1px solid #111827 !important;
+  border-radius: 0.625rem;
+  padding: 0.45rem 0.8rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.readable .menuList {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 200px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+  padding: 0.25rem;
+  z-index: 50;
+}
+
+.readable .menuItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.readable .menuItem:hover {
+  background: #f1f5f9; /* slate-100 */
+}
+
+/* Petite aide aux écrans étroits */
+@media (max-width: 420px) {
+  .readable .studentName {
+    max-width: 140px;
+  }
+}

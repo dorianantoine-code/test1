@@ -3,6 +3,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import styles from '../../styles/readable.module.css';
+import StudentHeader from '../../components/ui/StudentHeader';
 
 type EdtResponse = { ok: boolean; status: number; data: any };
 // ... (types et utilitaires déjà fournis dans ta version précédente, conservés à l’identique)
@@ -257,15 +259,19 @@ export default function AgendaPage() {
   return (
     <main className="min-h-screen p-6 md:p-10">
       <div className="max-w-6xl mx-auto space-y-6">
-        <header className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Emploi du temps</h1>
-            <p className="text-sm text-gray-500">{headerEleve}</p>
-          </div>
-          <Link href="/dashboard" className="rounded-xl border px-4 py-2 hover:bg-gray-50">
-            ← Retour
-          </Link>
-        </header>
+        <StudentHeader
+                    // Facultatif : passe les props si tu les as déjà en main
+                    // prenom="Lucas"
+                    // photoUrl="https://…/photo.jpg"
+                    // page -"Emploi du temps"
+                    pages={[
+                      { href: '/dashboard', label: 'Dashboard' },
+                      { href: '/ed/agenda', label: 'EDT' },
+                      { href: '/ed/cdt', label: 'CDT' },
+                      { href: '/ed/eleves', label: 'Élèves' },
+                      { href: '/', label: 'Déconnexion' },
+                    ]}
+                  />
 
         {/* Contrôles plage */}
         <form onSubmit={loadEdt} className="rounded-2xl border p-4 space-y-3">
@@ -405,7 +411,7 @@ export default function AgendaPage() {
                         <div className="opacity-80">
                           {ev.start_date.slice(11)}–{ev.end_date.slice(11)}
                         </div>
-                        {ev.typeCours && <div className="opacity-70">{ev.typeCours}</div>}
+                        {/*ev.typeCours && <div className="opacity-70">{ev.typeCours}</div>*/}
                       </div>
                     );
                   })}

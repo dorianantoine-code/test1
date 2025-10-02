@@ -3,6 +3,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import styles from '../../styles/readable.module.css';
+import StudentHeader from '../../components/ui/StudentHeader';
 
 type CdtResponse = { ok: boolean; status: number; data: any };
 type CdtDayResponse = { ok: boolean; status: number; data: any };
@@ -285,226 +287,231 @@ export default function CdtPage() {
   }
 
   return (
-    <main className="min-h-screen p-6 md:p-10">
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* HEADER blanc */}
-        <header className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-white">Cahier de texte</h1>
-            <p className="text-sm text-white/80">{headerEleve}</p>
-          </div>
-          <Link
-            href="/dashboard"
-            className="rounded-xl border px-4 py-2 text-white border-white/40 hover:bg-white/10"
+    <div className={styles.readable}>
+      <main className="min-h-screen p-6 md:p-10">
+        <div className="max-w-5xl mx-auto space-y-6">
+          {/* HEADER blanc */}
+          <StudentHeader
+                              // Facultatif : passe les props si tu les as déjà en main
+                              // prenom="Lucas"
+                              // photoUrl="https://…/photo.jpg"
+                              // page -"Emploi du temps"
+                              pages={[
+                                { href: '/dashboard', label: 'Dashboard' },
+                                { href: '/ed/agenda', label: 'EDT' },
+                                { href: '/ed/cdt', label: 'CDT' },
+                                { href: '/ed/eleves', label: 'Élèves' },
+                                { href: '/', label: 'Déconnexion' },
+                              ]}
+                            />
+
+          {/* Barre d'action */}
+          <form
+            onSubmit={loadCdt}
+            className="rounded-2xl border p-4 flex items-center gap-3 border-gray-300 bg-white/60 backdrop-blur"
           >
-            ← Retour
-          </Link>
-        </header>
+            <button
+              type="submit"
+              disabled={loading || !eleveId}
+              className="rounded-xl bg-black text-white px-4 py-2 disabled:opacity-50"
+              title={!eleveId ? 'Élève introuvable dans la sélection' : 'Recharger'}
+            >
+              {loading ? 'Chargement…' : 'Recharger'}
+            </button>
+            <span className="text-xs text-gray-700">
+              Liste des devoirs à faire à partir d’aujourd’hui (groupés par date).
+            </span>
+          </form>
 
-        {/* Barre d'action */}
-        <form
-          onSubmit={loadCdt}
-          className="rounded-2xl border p-4 flex items-center gap-3 border-gray-300 bg-white/60 backdrop-blur"
-        >
-          <button
-            type="submit"
-            disabled={loading || !eleveId}
-            className="rounded-xl bg-black text-white px-4 py-2 disabled:opacity-50"
-            title={!eleveId ? 'Élève introuvable dans la sélection' : 'Recharger'}
-          >
-            {loading ? 'Chargement…' : 'Recharger'}
-          </button>
-          <span className="text-xs text-gray-700">
-            Liste des devoirs à faire à partir d’aujourd’hui (groupés par date).
-          </span>
-        </form>
-
-        {error && (
-          <div className="rounded-2xl border border-red-500 bg-red-100 p-3 text-sm text-red-900">
-            {error}
-          </div>
-        )}
-
-        {/* LISTE CONTRASTÉE */}
-        <section className="rounded-2xl border p-4 space-y-4 border-gray-300 bg-white/60 backdrop-blur">
-          <h2 className="text-lg font-semibold text-black">Cahier de texte</h2>
-
-          {itemsByDate.length === 0 && !loading && (
-            <div className="text-sm text-gray-800">
-              Aucun devoir à venir.
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs text-gray-700">
-                  Debug : clés détectées
-                </summary>
-                <div className="text-xs mt-2">
-                  {(() => {
-                    const top = raw?.data ?? raw;
-                    const map = top?.data && typeof top.data === 'object' ? top.data : top;
-                    const keys = map && typeof map === 'object' ? Object.keys(map) : [];
-                    return (
-                      <ul className="list-disc pl-5">
-                        {keys.map((k) => (
-                          <li key={k}>
-                            <code>{k}</code> → {normalizeDateKey(k) ? 'date valide' : 'ignorée'}
-                          </li>
-                        ))}
-                      </ul>
-                    );
-                  })()}
-                </div>
-              </details>
+          {error && (
+            <div className="rounded-2xl border border-red-500 bg-red-100 p-3 text-sm text-red-900">
+              {error}
             </div>
           )}
 
-          <div className="space-y-4">
-            {itemsByDate.map(({ date, list }) => (
-              <div key={date} className="border rounded-xl border-gray-300 bg-white">
-                <button
-                  type="button"
-                  className="w-full text-left px-4 py-3 flex items-center justify-between text-black"
-                  onClick={() => toggleDay(date)}
-                >
-                  <span className="font-semibold">
-                    {new Date(date).toLocaleDateString('fr-FR', {
-                      weekday: 'long',
-                      day: '2-digit',
-                      month: 'long',
-                    })}
-                  </span>
-                  <span className="text-sm text-gray-800">
-                    {list.length} élément{list.length > 1 ? 's' : ''}
-                  </span>
-                </button>
+          {/* LISTE CONTRASTÉE */}
+          <section className="rounded-2xl border p-4 space-y-4 border-gray-300 bg-white/60 backdrop-blur">
+            <h2 className="text-lg font-semibold text-black">Cahier de texte</h2>
 
-                {/* liste simple */}
-                <div className="px-4 pb-3 space-y-2">
-                  {list.map((d) => (
-                    <div
-                      key={`${date}-${d.idDevoir}`}
-                      className="rounded-lg border p-3 flex flex-col gap-1 bg-white text-black border-gray-300"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold">{d.matiere}</span>
-                        {d.interrogation ? (
-                          <span className="text-xs rounded-full bg-yellow-300 text-black px-2 py-0.5">
-                            Interrogation
+            {itemsByDate.length === 0 && !loading && (
+              <div className="text-sm text-gray-800">
+                Aucun devoir à venir.
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-gray-700">
+                    Debug : clés détectées
+                  </summary>
+                  <div className="text-xs mt-2">
+                    {(() => {
+                      const top = raw?.data ?? raw;
+                      const map = top?.data && typeof top.data === 'object' ? top.data : top;
+                      const keys = map && typeof map === 'object' ? Object.keys(map) : [];
+                      return (
+                        <ul className="list-disc pl-5">
+                          {keys.map((k) => (
+                            <li key={k}>
+                              <code>{k}</code> → {normalizeDateKey(k) ? 'date valide' : 'ignorée'}
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    })()}
+                  </div>
+                </details>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {itemsByDate.map(({ date, list }) => (
+                <div key={date} className="border rounded-xl border-gray-300 bg-white">
+                  <button
+                    type="button"
+                    className="w-full text-left px-4 py-3 flex items-center justify-between text-black"
+                    onClick={() => toggleDay(date)}
+                  >
+                    <span className="font-semibold">
+                      {new Date(date).toLocaleDateString('fr-FR', {
+                        weekday: 'long',
+                        day: '2-digit',
+                        month: 'long',
+                      })}
+                    </span>
+                    <span className="text-sm text-gray-800">
+                      {list.length} élément{list.length > 1 ? 's' : ''}
+                    </span>
+                  </button>
+
+                  {/* liste simple */}
+                  <div className="px-4 pb-3 space-y-2">
+                    {list.map((d) => (
+                      <div
+                        key={`${date}-${d.idDevoir}`}
+                        className="rounded-lg border p-3 flex flex-col gap-1 bg-white text-black border-gray-300"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold">{d.matiere}</span>
+                          {d.interrogation ? (
+                            <span className="text-xs rounded-full bg-yellow-300 text-black px-2 py-0.5">
+                              Interrogation
+                            </span>
+                          ) : null}
+                          {d.rendreEnLigne ? (
+                            <span className="text-xs rounded-full bg-indigo-300 text-black px-2 py-0.5">
+                              Rendu en ligne
+                            </span>
+                          ) : null}
+                          <span
+                            className={`text-xs rounded-full px-2 py-0.5 ${
+                              d.effectue ? 'bg-emerald-300' : 'bg-rose-300'
+                            } text-black`}
+                          >
+                            {d.effectue ? 'Effectué' : 'À faire'}
                           </span>
-                        ) : null}
-                        {d.rendreEnLigne ? (
-                          <span className="text-xs rounded-full bg-indigo-300 text-black px-2 py-0.5">
-                            Rendu en ligne
-                          </span>
-                        ) : null}
-                        <span
-                          className={`text-xs rounded-full px-2 py-0.5 ${
-                            d.effectue ? 'bg-emerald-300' : 'bg-rose-300'
-                          } text-black`}
-                        >
-                          {d.effectue ? 'Effectué' : 'À faire'}
-                        </span>
+                        </div>
+                        {d.donneLe && (
+                          <div className="text-xs text-gray-800">
+                            Donné le <b>{new Date(d.donneLe).toLocaleDateString('fr-FR')}</b>
+                          </div>
+                        )}
                       </div>
-                      {d.donneLe && (
-                        <div className="text-xs text-gray-800">
-                          Donné le <b>{new Date(d.donneLe).toLocaleDateString('fr-FR')}</b>
+                    ))}
+                  </div>
+
+                  {/* détail du jour */}
+                  {openDate === date && (
+                    <div className="border-t px-4 py-4 space-y-4 border-gray-200">
+                      {dayLoading && (
+                        <div className="text-sm text-black">Chargement du détail…</div>
+                      )}
+                      {dayError && (
+                        <div className="rounded-lg border border-red-500 bg-red-100 p-3 text-sm text-red-900">
+                          {dayError}
+                        </div>
+                      )}
+
+                      {dayData[date] && (
+                        <div className="space-y-3">
+                          {(dayData[date]!.matieres || []).map((m) => {
+                            const aFaireHtml = sanitizeHtmlBasic(b64decodeHtml(m.aFaire?.contenu));
+                            const seanceHtml = sanitizeHtmlBasic(
+                              b64decodeHtml(m.contenuDeSeance?.contenu),
+                            );
+                            return (
+                              <div
+                                key={m.id}
+                                className="rounded-lg border p-4 bg-white text-black border-gray-300"
+                              >
+                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                  <div className="font-semibold">{m.matiere}</div>
+                                  <span className="text-sm text-gray-800">{m.nomProf}</span>
+                                  {m.interrogation ? (
+                                    <span className="text-xs rounded-full bg-yellow-300 text-black px-2 py-0.5">
+                                      Interrogation
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {aFaireHtml && (
+                                  <div className="mb-2">
+                                    <div className="text-sm font-semibold mb-1 text-black">
+                                      Travail à faire
+                                    </div>
+                                    <div
+                                      className="text-sm leading-relaxed text-black"
+                                      dangerouslySetInnerHTML={{ __html: aFaireHtml }}
+                                    />
+                                  </div>
+                                )}
+
+                                {m.aFaire?.documents?.length ? (
+                                  <div className="mb-2">
+                                    <div className="text-sm font-semibold mb-1 text-black">
+                                      Pièces jointes
+                                    </div>
+                                    <ul className="list-disc pl-5 text-sm text-black">
+                                      {m.aFaire.documents.map((f) => (
+                                        <li key={f.id}>
+                                          {f.libelle}{' '}
+                                          <span className="text-gray-800 text-xs">
+                                            ({Math.round(f.taille / 1024)} Ko)
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : null}
+
+                                {seanceHtml && (
+                                  <div className="mt-2">
+                                    <div className="text-sm font-semibold mb-1 text-black">
+                                      Contenu de séance
+                                    </div>
+                                    <div
+                                      className="text-sm leading-relaxed text-black"
+                                      dangerouslySetInnerHTML={{ __html: seanceHtml }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
-                  ))}
+                  )}
                 </div>
+              ))}
+            </div>
+          </section>
 
-                {/* détail du jour */}
-                {openDate === date && (
-                  <div className="border-t px-4 py-4 space-y-4 border-gray-200">
-                    {dayLoading && <div className="text-sm text-black">Chargement du détail…</div>}
-                    {dayError && (
-                      <div className="rounded-lg border border-red-500 bg-red-100 p-3 text-sm text-red-900">
-                        {dayError}
-                      </div>
-                    )}
-
-                    {dayData[date] && (
-                      <div className="space-y-3">
-                        {(dayData[date]!.matieres || []).map((m) => {
-                          const aFaireHtml = sanitizeHtmlBasic(b64decodeHtml(m.aFaire?.contenu));
-                          const seanceHtml = sanitizeHtmlBasic(
-                            b64decodeHtml(m.contenuDeSeance?.contenu),
-                          );
-                          return (
-                            <div
-                              key={m.id}
-                              className="rounded-lg border p-4 bg-white text-black border-gray-300"
-                            >
-                              <div className="flex flex-wrap items-center gap-2 mb-2">
-                                <div className="font-semibold">{m.matiere}</div>
-                                <span className="text-sm text-gray-800">{m.nomProf}</span>
-                                {m.interrogation ? (
-                                  <span className="text-xs rounded-full bg-yellow-300 text-black px-2 py-0.5">
-                                    Interrogation
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              {aFaireHtml && (
-                                <div className="mb-2">
-                                  <div className="text-sm font-semibold mb-1 text-black">
-                                    Travail à faire
-                                  </div>
-                                  <div
-                                    className="text-sm leading-relaxed text-black"
-                                    dangerouslySetInnerHTML={{ __html: aFaireHtml }}
-                                  />
-                                </div>
-                              )}
-
-                              {m.aFaire?.documents?.length ? (
-                                <div className="mb-2">
-                                  <div className="text-sm font-semibold mb-1 text-black">
-                                    Pièces jointes
-                                  </div>
-                                  <ul className="list-disc pl-5 text-sm text-black">
-                                    {m.aFaire.documents.map((f) => (
-                                      <li key={f.id}>
-                                        {f.libelle}{' '}
-                                        <span className="text-gray-800 text-xs">
-                                          ({Math.round(f.taille / 1024)} Ko)
-                                        </span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ) : null}
-
-                              {seanceHtml && (
-                                <div className="mt-2">
-                                  <div className="text-sm font-semibold mb-1 text-black">
-                                    Contenu de séance
-                                  </div>
-                                  <div
-                                    className="text-sm leading-relaxed text-black"
-                                    dangerouslySetInnerHTML={{ __html: seanceHtml }}
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Réponse brute */}
-        <section className="rounded-2xl border p-6 space-y-3 border-gray-300 bg-white/60 backdrop-blur">
-          <h2 className="text-lg font-semibold text-black">Réponse brute</h2>
-          <pre className="text-xs overflow-auto p-4 rounded-xl bg-gray-900 text-gray-100 font-mono leading-relaxed border border-gray-700">
-            {JSON.stringify(raw, null, 2)}
-          </pre>
-        </section>
-      </div>
-    </main>
+          {/* Réponse brute */}
+          <section className="rounded-2xl border p-6 space-y-3 border-gray-300 bg-white/60 backdrop-blur">
+            <h2 className="text-lg font-semibold text-black">Réponse brute</h2>
+            <pre className="text-xs overflow-auto p-4 rounded-xl bg-gray-900 text-gray-100 font-mono leading-relaxed border border-gray-700">
+              {JSON.stringify(raw, null, 2)}
+            </pre>
+          </section>
+        </div>
+      </main>
+    </div>
   );
 }
