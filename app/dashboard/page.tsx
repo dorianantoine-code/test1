@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import styles from '../styles/readable.module.css';
 import StudentHeader from '../components/ui/StudentHeader';
+import DevoirsPanel from '../components/DevoirsPanel';
 
 type LoginData = { account?: any; accounts?: any[]; token?: string };
 
@@ -129,6 +130,8 @@ export default function DashboardPage() {
                   dangerouslySetInnerHTML={{ __html: prettyPrintJson(loginData) }}
                 />
               </section>
+
+              <DevoirsPanel />
             </>
           )}
         </div>
