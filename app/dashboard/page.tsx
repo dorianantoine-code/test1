@@ -101,34 +101,12 @@ export default function DashboardPage() {
             </div>
           ) : (
             <>
-              <section className="rounded-2xl border p-6 space-y-4">
-                <h2 className="text-lg font-medium">Session</h2>
-                <div className="text-sm break-all">
-                  <div className="mb-2 font-mono">
-                    <span className="font-semibold">X-Token:</span>{' '}
-                    <span className="select-all">{token}</span>
-                  </div>
-                  {selectedId ? (
-                    <div className="mb-2 font-mono">
-                      <span className="font-semibold">Élève sélectionné:</span>{' '}
-                      <span className="select-all">
-                        #{selectedId} {selectedName ? `(${selectedName})` : ''}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="text-sm text-gray-500">
-                  Le token ci-dessus doit être envoyé dans <code>X-Token</code> sur toutes les
-                  requêtes ED suivantes.
-                </div>
-              </section>
+
 
               <section className="rounded-2xl border p-6 space-y-3">
-                <h2 className="text-lg font-medium">Infos compte (si renvoyées)</h2>
-                <pre
-                  className="text-xs overflow-auto p-4 rounded-xl bg-gray-900 text-gray-100 font-mono leading-relaxed border border-gray-700"
-                  dangerouslySetInnerHTML={{ __html: prettyPrintJson(loginData) }}
-                />
+                <h2 className="text-lg font-medium">Configurer mon compte</h2>
+                Bouton Ajouter contrainte Edt
+                Bonton Affiner coef par Matière
               </section>
 
               <DevoirsPanel />

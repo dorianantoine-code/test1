@@ -188,10 +188,7 @@ export default function DevoirsPanel() {
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-medium">Devoirs (CDT)</h2>
-        <div className="text-sm opacity-70">
-          {eleveId ? `Élève #${eleveId}` : 'Élève non sélectionné'}
-        </div>
+        <h2 className="text-xl font-medium">Ma fiche de travail du jour :</h2>
       </div>
 
       {disabled && (
@@ -222,8 +219,10 @@ export default function DevoirsPanel() {
       {!disabled && !loading && !error && normalized && (
         <div className="rounded-lg border p-4 overflow-x-auto">
           <pre className="text-xs md:text-sm whitespace-pre">
-            {JSON.stringify(normalized, null, 2)}
+            Ici vont se trouve rprovisoirment mes calculs
+            {/*JSON.stringify(normalized, null, 2)*/}
           </pre>
+          Ici va se trouver un bouton pour acceder à ma fiche de devoir
         </div>
       )}
     </section>
