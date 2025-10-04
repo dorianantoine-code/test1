@@ -78,9 +78,6 @@ export default function DashboardPage() {
       <main className="min-h-screen p-6 md:p-10">
         <div className="max-w-3xl mx-auto space-y-6">
           <StudentHeader
-            // Facultatif : passe les props si tu les as déjà en main
-            // prenom="Lucas"
-            // photoUrl="https://…/photo.jpg"
             pages={[
               { href: '/dashboard', label: 'Dashboard' },
               { href: '/ed/agenda', label: 'EDT' },
@@ -101,12 +98,24 @@ export default function DashboardPage() {
             </div>
           ) : (
             <>
+              {/* Bloc Configurer mon compte + bouton Configurer ma fiche */}
+              <section className="rounded-2xl border p-6 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-medium">Configurer mon compte</h2>
 
+                  {/* 👉 Nouveau bouton */}
+                  <Link
+                    href="/configuration"
+                    className="inline-flex items-center rounded-xl bg-black text-white px-4 py-2 hover:opacity-90"
+                  >
+                    Configurer ma fiche
+                  </Link>
+                </div>
 
-              <section className="rounded-2xl border p-6 space-y-3">
-                <h2 className="text-lg font-medium">Configurer mon compte</h2>
-                Bouton Ajouter contrainte Edt
-                Bonton Affiner coef par Matière
+                <div className="text-sm space-y-1">
+                  <div>Bouton Ajouter contrainte Edt</div>
+                  <div>Bonton Affiner coef par Matière</div>
+                </div>
               </section>
 
               <DevoirsPanel />
