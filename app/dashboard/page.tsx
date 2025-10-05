@@ -101,20 +101,18 @@ export default function DashboardPage() {
               {/* Bloc Configurer mon compte + bouton Configurer ma fiche */}
               <section className="rounded-2xl border p-6 space-y-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-lg font-medium">Configurer mon compte</h2>
+                  <h2 className="text-lg font-medium">
+                    Besoin d'ajouter des créneau perso à mon agenda (sport, musiqiue, etc..) ou d'affiner le temps que je passe par
+                    matière ?{' '}
+                  </h2>
 
                   {/* 👉 Nouveau bouton */}
                   <Link
                     href="/configuration"
                     className="inline-flex items-center rounded-xl bg-black text-white px-4 py-2 hover:opacity-90"
                   >
-                    Configurer ma fiche
+                    Je configure ma fiche
                   </Link>
-                </div>
-
-                <div className="text-sm space-y-1">
-                  <div>Bouton Ajouter contrainte Edt</div>
-                  <div>Bonton Affiner coef par Matière</div>
                 </div>
               </section>
 

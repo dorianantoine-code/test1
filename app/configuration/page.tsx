@@ -24,7 +24,7 @@ export default function ConfigurationPage() {
           {/* Zone 1 : Config agenda perso */}
           <section className="rounded-2xl border p-6 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium">Configurer mon agenda perso</h2>
+              <h2 className="text-lg font-medium">Mon planning personnel</h2>
               <Link
                 href="/configuration/agenda"
                 className="inline-flex items-center rounded-xl bg-black text-white px-4 py-2 hover:opacity-90"
@@ -33,8 +33,7 @@ export default function ConfigurationPage() {
               </Link>
             </div>
             <p className="text-sm opacity-80">
-              Connecte ton agenda personnel (Google/Apple/Outlook…) pour y envoyer tes devoirs et
-              événements.
+              Avec mes créneaux de sports, musique, soutien scolaire ou même de chill..
             </p>
           </section>
 
@@ -46,11 +45,11 @@ export default function ConfigurationPage() {
                 href="/configuration/matieres"
                 className="inline-flex items-center rounded-xl bg-black text-white px-4 py-2 hover:opacity-90"
               >
-                Je configure
+                Je personnalise
               </Link>
             </div>
             <p className="text-sm opacity-80">
-              Personnalise tes matières (alias, couleur, coefficients, regroupements).
+              Le temps que je dois bosser pour chaque matière. Je galère et j'ai besoin de temps sur certaines et je vais super vite sur d'autre..
             </p>
           </section>
         </div>
