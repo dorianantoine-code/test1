@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import styles from '../styles/readable.module.css';
 import StudentHeader from '../components/ui/StudentHeader';
 import DevoirsPanel from '../components/DevoirsPanel';
+import CalculDispo from '../components/CalculDispo';
 
 type LoginData = { account?: any; accounts?: any[]; token?: string };
 
@@ -102,8 +103,8 @@ export default function DashboardPage() {
               <section className="rounded-2xl border p-6 space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg font-medium">
-                    Besoin d'ajouter des créneau perso à mon agenda (sport, musiqiue, etc..) ou d'affiner le temps que je passe par
-                    matière ?{' '}
+                    Besoin d'ajouter des créneau perso à mon agenda (sport, musiqiue, etc..) ou
+                    d'affiner le temps que je passe par matière ?{' '}
                   </h2>
 
                   {/* 👉 Nouveau bouton */}
@@ -115,7 +116,9 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               </section>
-
+              {/* Disponibilités (prochaines 4 semaines) */}
+              <CalculDispo token={token} eleveId={selectedId} />
+              {/* Liste les devoirs */}
               <DevoirsPanel />
             </>
           )}
