@@ -53,35 +53,31 @@ function ymd(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
-// Convert "YYYY-MM-DD HH:mm" to minutes since midnight
 function toMinutes(str: string): number | null {
   if (!str) return null;
   const parts = str.split(' ');
-  const hm = parts.length === 2 ? parts[1] : parts[0]; // tolère "HH:mm"
+  const hm = parts.length === 2 ? parts[1] : parts[0];
   const [h, m] = hm.split(':').map((x) => parseInt(x, 10));
   if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 60 + m;
 }
 
-// Jour de semaine 1..7 (1=lundi … 7=dimanche)
 function weekday1to7(dateYMD: string): number {
   const dt = new Date(`${dateYMD}T12:00:00`);
   const js = dt.getDay(); // 0=Sun..6=Sat
   return js === 0 ? 7 : js; // 1..7
 }
 
-// Jeudi prochain (ou aujourd’hui si on est déjà jeudi)
 function nextThursdayFrom(today: Date): Date {
   const wd0 = today.getDay(); // 0=dim…6=sam
   const wd = wd0 === 0 ? 7 : wd0; // 1..7
   const THURSDAY = 4; // 1=lun … 4=jeu … 7=dim
-  const delta = (THURSDAY - wd + 7) % 7; // 0 si déjà jeudi
+  const delta = (THURSDAY - wd + 7) % 7;
   const d = new Date(today);
   d.setDate(today.getDate() + delta);
   return d;
 }
 
-// Extrait { [date]: { end: 'HH:mm' | null, conge: boolean } } en excluant PERMANENCE
 function extractDailyInfo(raw: any): Record<string, { end: string | null; conge: boolean }> {
   console.log('[CalculDispo] extractDailyInfo: raw keys =', Object.keys(raw || {}));
 
@@ -99,7 +95,7 @@ function extractDailyInfo(raw: any): Record<string, { end: string | null; conge:
   for (const it of arr) {
     if (!it?.start_date || !it?.end_date) continue;
 
-    const date = String(it.start_date).slice(0, 10); // YYYY-MM-DD
+    const date = String(it.start_date).slice(0, 10);
     const endMin = toMinutes(String(it.end_date));
     const type = (it.typeCours || '').toUpperCase();
 
@@ -109,10 +105,10 @@ function extractDailyInfo(raw: any): Record<string, { end: string | null; conge:
       const cur = byDate.get(date)!;
       cur.conge = true;
       byDate.set(date, cur);
-      continue; // ne pas ajouter de fin
+      continue;
     }
 
-    if (type === 'PERMANENCE') continue; // exclut permanence
+    if (type === 'PERMANENCE') continue;
 
     if (endMin != null) {
       const cur = byDate.get(date)!;
@@ -166,7 +162,6 @@ export default function CalculDispo({ onAggregateScore }: Props) {
   const [loadingAgenda, setLoadingAgenda] = useState(false);
   const [errAgenda, setErrAgenda] = useState<string | null>(null);
 
-  // fenêtre 4 semaines rolling
   const [win] = useState<{ start: string; end: string }>(() => {
     const start = new Date();
     const end = new Date();
@@ -279,12 +274,66 @@ export default function CalculDispo({ onAggregateScore }: Props) {
   const { aggFrom, aggTo, aggregateScore } = useMemo(() => {
     const today = new Date();
     const from = ymd(today);
-    const to = ymd(nextThursdayFrom(today)); // <-- jeudi
+    const to = ymd(nextThursdayFrom(today));
     const score = rows
       .filter((r) => r.date >= from && r.date <= to)
       .reduce((acc, r) => acc + r.scoreTotal, 0);
     return { aggFrom: from, aggTo: to, aggregateScore: score };
   }, [rows]);
+
+  // score du jour (ou week-end) — avec imputation du samedi si on est dimanche et que samedi manque dans les rows
+  const { dayLabel, dayScore, weekendFrom, weekendTo } = useMemo(() => {
+    const today = new Date();
+    const todayStr = ymd(today);
+    const wd = weekday1to7(todayStr); // 1..7
+
+    if (wd === 6 || wd === 7) {
+      // Détermination samedi/dimanche du week-end courant
+      let saturday = new Date(today);
+      let sunday = new Date(today);
+      if (wd === 6) {
+        // Samedi -> dimanche = +1
+        sunday.setDate(today.getDate() + 1);
+      } else {
+        // Dimanche -> samedi = -1
+        saturday.setDate(today.getDate() - 1);
+      }
+      const satStr = ymd(saturday);
+      const sunStr = ymd(sunday);
+
+      // Score samedi (réel si présent, sinon imputation 3 - (événement perso ? 1 : 0))
+      let satScore = rows.find((r) => r.date === satStr)?.scoreTotal;
+      if (wd === 7 && satScore == null) {
+        const hasPersonalEventSaturday = daysWithPersonalEvent.has(6); // 6 = samedi
+        satScore = 3 + (hasPersonalEventSaturday ? -1 : 0);
+        console.log(
+          '[CalculDispo] Imputation score samedi:',
+          satScore,
+          '(3',
+          hasPersonalEventSaturday ? '-1' : '+0',
+          ')',
+        );
+      }
+
+      const sunScore = rows.find((r) => r.date === sunStr)?.scoreTotal ?? 0;
+
+      return {
+        dayLabel: 'Score week-end',
+        dayScore: (satScore ?? 0) + sunScore,
+        weekendFrom: satStr,
+        weekendTo: sunStr,
+      };
+    }
+
+    // Jour ouvré (lun→ven)
+    const score = rows.find((r) => r.date === todayStr)?.scoreTotal ?? 0;
+    return {
+      dayLabel: 'Score du jour',
+      dayScore: score,
+      weekendFrom: null as string | null,
+      weekendTo: null as string | null,
+    };
+  }, [rows, daysWithPersonalEvent]);
 
   // expose au parent + sessionStorage
   useEffect(() => {
@@ -298,20 +347,42 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     }
   }, [aggregateScore, aggFrom, aggTo, onAggregateScore]);
 
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('calcdispo_day_label', dayLabel);
+      sessionStorage.setItem('calcdispo_day_score', String(dayScore));
+      if (weekendFrom) sessionStorage.setItem('calcdispo_weekend_from', weekendFrom);
+      if (weekendTo) sessionStorage.setItem('calcdispo_weekend_to', weekendTo);
+    } catch {}
+  }, [dayLabel, dayScore, weekendFrom, weekendTo]);
+
   return (
     <section className="rounded-2xl border p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">Calcul dispo (4 semaines)</h2>
       </div>
 
-      {/* Score agrégé semaine courante */}
-      <div className="rounded-xl border p-4 bg-gray-50">
-        <div className="text-sm opacity-70">Score total (aujourd’hui → jeudi prochain)</div>
-        <div className="text-2xl font-semibold">
-          {aggregateScore.toFixed(2)}{' '}
-          <span className="text-base font-normal opacity-70">
-            ({aggFrom} → {aggTo})
-          </span>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="rounded-xl border p-4 bg-gray-50">
+          <div className="text-sm opacity-70">Score total (aujourd’hui → jeudi prochain)</div>
+          <div className="text-2xl font-semibold">
+            {aggregateScore.toFixed(2)}{' '}
+            <span className="text-base font-normal opacity-70">
+              ({aggFrom} → {aggTo})
+            </span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border p-4 bg-gray-50">
+          <div className="text-sm opacity-70">{dayLabel}</div>
+          <div className="text-2xl font-semibold">
+            {dayScore.toFixed(2)}{' '}
+            {dayLabel === 'Score week-end' && weekendFrom && weekendTo && (
+              <span className="text-base font-normal opacity-70">
+                ({weekendFrom} + {weekendTo})
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
