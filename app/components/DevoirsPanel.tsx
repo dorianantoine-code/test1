@@ -15,7 +15,8 @@ type EdCdtItem = {
   rendreEnLigne?: boolean;
 };
 
-type EdCdtData = Record<string, EdCdtItem[]>;
+type EdCdtData = Record<string, EdCdtItem[]>; // { "YYYY-MM-DD": [ {...}, ... ] }
+
 type EdCdtResponse = {
   code?: number;
   message?: string;
@@ -24,22 +25,29 @@ type EdCdtResponse = {
   result?: any;
 };
 
-type DevoirRow = {
+type DbDevoir = {
   ed_devoir_id: number;
-  due_date: string; // "YYYY-MM-DD"
+  ed_eleve_id: number;
+  due_date: string | null;
   matiere: string | null;
   code_matiere: string | null;
   a_faire: boolean | null;
-  documents_a_faire: boolean | null;
-  donne_le: string | null;
   effectue: boolean | null;
   interrogation: boolean | null;
-  rendre_en_ligne: boolean | null;
+  documents_a_faire?: boolean | null;
+  donne_le?: string | null;
+  rendre_en_ligne?: boolean | null;
+  last_sync_at?: string;
+  // Enrichis par l'API
+  coef_matiere?: number;
+  coef_controle?: number;
+  score?: number;
 };
 
 function getTokenAndEleveId() {
   let token: string | null = null;
   let eleveId: number | null = null;
+
   try {
     token = sessionStorage.getItem('ed_token');
     const eleveIdStr = sessionStorage.getItem('ed_selected_eleve_id');
@@ -61,58 +69,26 @@ function getTokenAndEleveId() {
           Number(parsedEleve?.ed_eleve_id ?? parsedEleve?.id ?? parsedEleve?.eleveId) || null;
       }
     }
-  } catch {}
-  return { token, eleveId };
-}
-
-function todayInParis(): string {
-  const fmt = new Intl.DateTimeFormat('fr-CA', {
-    timeZone: 'Europe/Paris',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const parts = fmt.formatToParts(new Date());
-  const y = parts.find((p) => p.type === 'year')?.value ?? '1970';
-  const m = parts.find((p) => p.type === 'month')?.value ?? '01';
-  const d = parts.find((p) => p.type === 'day')?.value ?? '01';
-  return `${y}-${m}-${d}`;
-}
-
-function formatDateFR(dateStr: string) {
-  try {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    return new Intl.DateTimeFormat('fr-FR', {
-      timeZone: 'Europe/Paris',
-      weekday: 'long',
-      day: '2-digit',
-      month: 'long',
-    }).format(dt);
   } catch {
-    return dateStr;
+    // ignore
   }
+
+  return { token, eleveId };
 }
 
 export default function DevoirsPanel() {
   const [{ token, eleveId }, setAuth] = useState(getTokenAndEleveId);
-
-  // --- Etats existants (CDT + sync) ---
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<EdCdtResponse | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const lastSyncedKeyRef = useRef<string | null>(null);
 
-  const lastCdtSyncSigRef = useRef<string | null>(null);
-  const lastFicheUpsertRef = useRef<string | null>(null);
+  // Nouveaux états : devoirs DB enrichis
+  const [dbDevoirs, setDbDevoirs] = useState<DbDevoir[]>([]);
+  const [dbLoading, setDbLoading] = useState<boolean>(false);
+  const [dbError, setDbError] = useState<string | null>(null);
 
-  // --- Nouveaux états : listing des prochains devoirs ---
-  const [upcoming, setUpcoming] = useState<Record<string, DevoirRow[]>>({});
-  const [upcomingLoading, setUpcomingLoading] = useState(false);
-  const [upcomingError, setUpcomingError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0); // pour refetch après sync
-
-  // suivre changements du storage
   useEffect(() => {
     const onStorage = () => setAuth(getTokenAndEleveId());
     window.addEventListener('storage', onStorage);
@@ -121,36 +97,7 @@ export default function DevoirsPanel() {
 
   const disabled = useMemo(() => !token || !eleveId, [token, eleveId]);
 
-  // A) Créer / MAJ la fiche du jour
-  useEffect(() => {
-    if (!eleveId) return;
-
-    const jour = todayInParis();
-    const key = `${eleveId}:${jour}`;
-    if (lastFicheUpsertRef.current === key) return;
-
-    let aborted = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/fiche/upsert', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ eleveId, jour }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-        if (!aborted) lastFicheUpsertRef.current = key;
-      } catch (e) {
-        console.warn('Upsert fiche_devoir (jour) échoué:', e);
-      }
-    })();
-
-    return () => {
-      aborted = true;
-    };
-  }, [eleveId]);
-
-  // B) Charger le CDT via /api/ed/cdt (inchangé)
+  // Charger le CDT via la route existante /api/ed/cdt
   useEffect(() => {
     let abort = false;
 
@@ -165,7 +112,6 @@ export default function DevoirsPanel() {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ token, eleveId }),
-          cache: 'no-store',
         });
 
         if (!res.ok) {
@@ -193,79 +139,56 @@ export default function DevoirsPanel() {
     };
   }, [token, eleveId, disabled]);
 
-  // C) Normaliser l'objet pour la sync vers table devoir
-  const normalized: Record<string, EdCdtItem[]> | null = useMemo(() => {
+  // Normaliser l'objet pour l'affichage et la sync
+  const normalized: EdCdtData | null = useMemo(() => {
     if (!payload) return null;
-
-    const candidates = [
-      payload?.cahierDeTexte,
-      payload?.data?.cahierDeTexte,
-      payload?.data,
-      payload?.result,
-    ];
-
-    const isDateKey = (k: string) => /^\d{4}-\d{2}-\d{2}$/.test(k);
-
-    for (const cand of candidates) {
-      if (cand && typeof cand === 'object') {
-        const entries = Object.entries(cand).filter(([k]) => isDateKey(k));
-        if (entries.length) {
-          const out: Record<string, EdCdtItem[]> = {};
-          for (const [date, val] of entries) {
-            if (!Array.isArray(val)) {
-              console.warn('CDT: valeur non-tableau pour la date', date, val);
-            }
-            out[date] = Array.isArray(val) ? (val as EdCdtItem[]) : [];
-          }
-          return out;
-        }
-      }
-    }
+    const root =
+      payload?.cahierDeTexte ??
+      payload?.data?.cahierDeTexte ??
+      payload?.data ??
+      payload?.result ??
+      payload;
+    if (root && typeof root === 'object') return root as EdCdtData;
     return null;
   }, [payload]);
 
-  // D) Sync automatique vers table public.devoir
+  // Sync auto -> Supabase
   useEffect(() => {
     if (!eleveId || !normalized) return;
 
-    // signature stable triée (date + idDevoir + aFaire + effectue)
-    const pairs: Array<[string, number, boolean | undefined, boolean | undefined]> = [];
-    const dates = Object.keys(normalized).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-
-    for (const date of dates) {
-      const rawVal = normalized[date];
-      const arr = Array.isArray(rawVal) ? rawVal : [];
-      const items = arr
-        .slice()
-        .sort((a, b) => (Number(a?.idDevoir) || 0) - (Number(b?.idDevoir) || 0));
-      for (const it of items) {
-        const id = Number(it?.idDevoir) || 0;
-        pairs.push([date, id, it?.aFaire, it?.effectue]);
+    function hash(obj: unknown) {
+      try {
+        const str = JSON.stringify(obj);
+        let h = 5381;
+        for (let i = 0; i < str.length; i++) {
+          h = (h * 33) ^ str.charCodeAt(i);
+        }
+        return `${eleveId}:${(h >>> 0).toString(36)}`;
+      } catch {
+        return `${eleveId}:nohash`;
       }
     }
 
-    const sigStr = JSON.stringify(pairs);
-    let h = 5381;
-    for (let i = 0; i < sigStr.length; i++) h = (h * 33) ^ sigStr.charCodeAt(i);
-    const syncSig = `${eleveId}:${(h >>> 0).toString(36)}`;
-
-    if (lastCdtSyncSigRef.current === syncSig) return;
+    const key = hash(normalized);
+    if (lastSyncedKeyRef.current === key) return;
 
     let aborted = false;
+
     (async () => {
       try {
         setSyncError(null);
         const res = await fetch('/api/devoir/sync', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ eleveId, cdtData: normalized }),
+          body: JSON.stringify({
+            eleveId,
+            cdtData: normalized,
+          }),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
         if (!aborted) {
-          lastCdtSyncSigRef.current = syncSig;
-          // Déclencher un rafraîchissement de la liste "prochains devoirs"
-          setRefreshKey((k) => k + 1);
+          lastSyncedKeyRef.current = key;
         }
       } catch (e: any) {
         if (!aborted) setSyncError(e?.message || 'Erreur sync devoirs');
@@ -277,78 +200,65 @@ export default function DevoirsPanel() {
     };
   }, [eleveId, normalized]);
 
-  // E) Charger les prochains devoirs depuis notre nouvelle route
+  // Charger les devoirs depuis la DB (enrichis)
   useEffect(() => {
-    if (!eleveId) return;
-
     let aborted = false;
-    (async () => {
+    async function run() {
+      if (!eleveId) return;
+      setDbLoading(true);
+      setDbError(null);
       try {
-        setUpcomingLoading(true);
-        setUpcomingError(null);
-
         const res = await fetch('/api/devoir/list', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ eleveId /*, accountId: ??? optionnel */ }),
+          body: JSON.stringify({ eleveId, onlyFuture: true }),
+          cache: 'no-store',
         });
         const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-
-        const arr: DevoirRow[] = Array.isArray(json?.items) ? json.items : [];
-
-        // Grouper par date
-        const grouped: Record<string, DevoirRow[]> = {};
-        for (const it of arr) {
-          const k = it.due_date || '—';
-          if (!grouped[k]) grouped[k] = [];
-          grouped[k].push(it);
-        }
-        // Trier chaque groupe par matière puis id
-        for (const k of Object.keys(grouped)) {
-          grouped[k].sort((a, b) => {
-            const ma = (a.matiere || '').localeCompare(b.matiere || '');
-            if (ma !== 0) return ma;
-            return (a.ed_devoir_id || 0) - (b.ed_devoir_id || 0);
-          });
-        }
-
-        if (!aborted) setUpcoming(grouped);
+        if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+        if (!aborted) setDbDevoirs(json.items || []);
       } catch (e: any) {
-        if (!aborted) setUpcomingError(e?.message || 'Erreur chargement prochains devoirs');
+        if (!aborted) setDbError(e?.message || 'Erreur chargement devoirs DB');
       } finally {
-        if (!aborted) setUpcomingLoading(false);
+        if (!aborted) setDbLoading(false);
       }
-    })();
-
+    }
+    run();
     return () => {
       aborted = true;
     };
-  }, [eleveId, refreshKey]);
+  }, [eleveId, lastSyncedKeyRef.current]); // recharge aussi après une sync
 
-  // Rendu
-
-  const upcomingDates = useMemo(
-    () => Object.keys(upcoming).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
-    [upcoming],
-  );
+  // Petit helper d’affichage
+  function chip(v: any, color?: 'green' | 'red' | 'blue' | 'amber') {
+    const base = 'inline-block px-2 py-0.5 text-xs rounded-full border';
+    const cx =
+      color === 'green'
+        ? `${base} bg-green-50 border-green-200 text-green-700`
+        : color === 'red'
+        ? `${base} bg-red-50 border-red-200 text-red-700`
+        : color === 'amber'
+        ? `${base} bg-amber-50 border-amber-200 text-amber-700`
+        : `${base} bg-blue-50 border-blue-200 text-blue-700`;
+    return <span className={cx}>{String(v)}</span>;
+  }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-medium">Ma fiche de travail du jour :</h2>
-        <div className="text-sm opacity-70">
-          {eleveId ? `Élève #${eleveId}` : 'Élève non sélectionné'}
-        </div>
       </div>
 
-      {/* États CDT */}
       {disabled && (
         <div className="rounded-lg border p-4">
           <p className="text-sm">
             Impossible de charger les devoirs : <strong>token</strong> ou <strong>eleveId</strong>{' '}
             manquant(s).
           </p>
+          <ul className="list-disc ml-5 mt-2 text-sm">
+            <li>Assure-toi d’être connecté (token ED valide).</li>
+            <li>Sélectionne un élève depuis la page dédiée.</li>
+          </ul>
         </div>
       )}
 
@@ -364,67 +274,66 @@ export default function DevoirsPanel() {
         </div>
       )}
 
-      {/* Joli rendu des prochains devoirs */}
-      {!disabled && !loading && !upcomingLoading && upcomingDates.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Prochains devoirs</h3>
-
-          {upcomingDates.map((date) => (
-            <div key={date} className="rounded-xl border p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="font-semibold">
-                  {formatDateFR(date)} <span className="opacity-60">({date})</span>
-                </div>
-                <span className="text-xs px-2 py-1 rounded-full border">
-                  {upcoming[date].length} devoir{upcoming[date].length > 1 ? 's' : ''}
-                </span>
-              </div>
-
-              <ul className="space-y-2">
-                {upcoming[date].map((d) => (
-                  <li
-                    key={`${date}-${d.ed_devoir_id}`}
-                    className="flex items-start justify-between rounded-lg border px-3 py-2"
-                  >
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium">
-                        {d.matiere || d.code_matiere || 'Matière'}
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-xs opacity-80">
-                        {d.a_faire ? (
-                          <span className="px-2 py-0.5 rounded-full border">À faire</span>
-                        ) : null}
-                        {d.effectue ? (
-                          <span className="px-2 py-0.5 rounded-full border">Fait</span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full border">À faire</span>
-                        )}
-                        {d.interrogation ? (
-                          <span className="px-2 py-0.5 rounded-full border">Interrogation</span>
-                        ) : null}
-                        {d.documents_a_faire ? (
-                          <span className="px-2 py-0.5 rounded-full border">Documents</span>
-                        ) : null}
-                        {d.rendre_en_ligne ? (
-                          <span className="px-2 py-0.5 rounded-full border">En ligne</span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="text-xs opacity-60 text-right">
-                      Donné le {d.donne_le ?? '—'}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+      {/* (Optionnel) zone debug / placeholder de tes calculs courants */}
+      {!disabled && !loading && !error && (
+        <div className="rounded-lg border p-4">
+          <div className="text-sm opacity-60 mb-2">Aperçu (ED / sync effectuée)</div>
+          <div className="text-sm">Les données sont synchronisées en base à chaque affichage.</div>
         </div>
       )}
 
-      {!disabled && !loading && (upcomingLoading || upcomingDates.length === 0) && (
-        <div className="rounded-lg border p-4 text-sm opacity-80">
-          {upcomingLoading ? 'Chargement des prochains devoirs…' : 'Aucun devoir à venir.'}
+      {/* ---- Prochains devoirs (DB) enrichis ---- */}
+      {!disabled && (
+        <div className="rounded-2xl border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-medium">Prochains devoirs (depuis la base)</h3>
+            {dbLoading && <div className="text-sm opacity-70">Chargement…</div>}
+          </div>
+
+          {dbError && (
+            <div className="rounded-lg border p-3 text-red-600 text-sm">Erreur : {dbError}</div>
+          )}
+
+          {!dbError && !dbLoading && (!dbDevoirs || dbDevoirs.length === 0) && (
+            <div className="rounded-lg border p-3 text-sm">Aucun devoir à venir.</div>
+          )}
+
+          {!dbError && !dbLoading && dbDevoirs && dbDevoirs.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="py-2 pr-3">Date</th>
+                    <th className="py-2 pr-3">Matière</th>
+                    <th className="py-2 pr-3">À faire</th>
+                    <th className="py-2 pr-3">Contrôle</th>
+                    <th className="py-2 pr-3">Coef matière</th>
+                    <th className="py-2 pr-3">Coef contrôle</th>
+                    <th className="py-2 pr-3">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dbDevoirs.map((dv) => (
+                    <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
+                      <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
+                      <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
+                      <td className="py-2 pr-3">
+                        {dv.a_faire ? chip('Oui', 'green') : chip('Non', 'amber')}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
+                      </td>
+                      <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
+                      <td className="py-2 pr-3">
+                        {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
+                      </td>
+                      <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </section>
