@@ -1,378 +1,358 @@
-// components/CalculDispo.tsx
+// app/components/CalculDispo.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 
+type EdtItem = {
+  id: number;
+  typeCours?: string; // COURS | PERMANENCE | CONGE ...
+  start_date: string; // "YYYY-MM-DD HH:mm"
+  end_date: string; // "YYYY-MM-DD HH:mm"
+  [k: string]: any;
+};
+
 type EdtResponse = {
-  ok: boolean;
+  ok?: boolean;
   status?: number;
   data?: any;
-  message?: string;
+};
+
+type AgendaPersoItem = {
+  id: number;
+  ed_eleve_id: number;
+  ed_account_id: number;
+  event_type: 'Sport' | 'Musique' | 'Cours particulier' | 'Autres';
+  days: number[]; // 1=lundi..7=dimanche
+  note?: string | null;
 };
 
 type Row = {
-  date: string; // "YYYY-MM-DD"
-  sortie: string; // "HH:MM" ou "—"
-  // Scoring:
-  // 3 (CONGE), 2 (<15:00), 1.5 (15:00–16:00 exclu), 1 (16:00–18:00), 0 (>=18:00 ou aucune sortie)
-  score: number;
+  date: string; // YYYY-MM-DD
+  endTimeStr: string | null;
+  scoreBase: number; // 3 / 2 / 1.5 / 1
+  scorePerso: number; // -1 or 0
+  scoreTotal: number; // scoreBase + scorePerso
+  conge: boolean;
 };
 
-type DailyInfo = Record<string, { sortie: string | null; conge: boolean }>;
+function getTokenAndEleveId() {
+  let token: string | null = null;
+  let eleveId: number | null = null;
+  try {
+    token = sessionStorage.getItem('ed_token');
+    const sid = sessionStorage.getItem('ed_selected_eleve_id');
+    if (sid) eleveId = Number(sid);
+  } catch {}
+  return { token, eleveId };
+}
 
-function fmtDateParisISO(date: Date) {
-  const f = new Intl.DateTimeFormat('fr-CA', {
-    timeZone: 'Europe/Paris',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const parts = f.formatToParts(date);
-  const y = parts.find((p) => p.type === 'year')?.value ?? '1970';
-  const m = parts.find((p) => p.type === 'month')?.value ?? '01';
-  const d = parts.find((p) => p.type === 'day')?.value ?? '01';
+function ymd(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
 
-function addDaysParis(base: Date, days: number) {
-  const d = new Date(base.getTime());
-  d.setUTCDate(d.getUTCDate() + days);
-  return d;
+// Convert "YYYY-MM-DD HH:mm" to minutes since midnight
+function toMinutes(str: string): number | null {
+  // robust parsing
+  if (!str) return null;
+  const [d, hm] = str.split(' ');
+  if (!hm) return null;
+  const [h, m] = hm.split(':').map((x) => parseInt(x, 10));
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
 }
 
-function hhmmFromDateStr(dtStr: string): string | null {
-  if (!dtStr || typeof dtStr !== 'string') return null;
-  const m1 = dtStr.match(/T(\d{2}:\d{2})/);
-  if (m1) return m1[1];
-  const m2 = dtStr.match(/\b(\d{2}:\d{2})\b/);
-  if (m2) return m2[1];
-  return null;
+// Jour de semaine 1..7 (1=lundi ... 7=dimanche)
+// Utilise 12:00 locale pour éviter les surprises de fuseau.
+function weekday1to7(dateYMD: string): number {
+  const dt = new Date(`${dateYMD}T12:00:00`);
+  const js = dt.getDay(); // 0=Sun..6=Sat
+  return js === 0 ? 7 : js; // 1..7
 }
 
-function toMinutes(hhmm: string): number | null {
-  const m = hhmm.match(/^(\d{2}):(\d{2})$/);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const mn = Number(m[2]);
-  if (!Number.isFinite(h) || !Number.isFinite(mn)) return null;
-  return h * 60 + mn;
-}
+// Extrait la dernière heure de fin par journée (en excluant PERMANENCE) et
+// détecte les jours CONGE. Retourne un objet { [date]: { end: 'HH:mm' | null, conge: boolean } }
+function extractDailyInfo(raw: any): Record<string, { end: string | null; conge: boolean }> {
+  console.log('[CalculDispo] extractDailyInfo: raw keys =', Object.keys(raw || {}));
 
-/** Essaie d'extraire le tableau d'événements depuis différents formats observés */
-function resolveEventsArray(raw: any): any[] {
-  const logPick = (where: string, arr: any[]) =>
-    console.log(`[CalculDispo] events array picked from ${where}: length=${arr.length}`);
+  // Trouver un tableau de séances quelque part dans la réponse
+  let arr: EdtItem[] = [];
 
-  // 1) raw.data est un tableau ?
-  if (Array.isArray(raw?.data)) {
-    logPick('raw.data', raw.data);
-    return raw.data;
-  }
-  // 2) raw.data.data est un tableau ?
-  if (Array.isArray(raw?.data?.data)) {
-    logPick('raw.data.data', raw.data.data);
-    return raw.data.data;
-  }
-  // 3) raw.result ?
-  if (Array.isArray(raw?.result)) {
-    logPick('raw.result', raw.result);
-    return raw.result;
-  }
-  // 4) raw.items ?
-  if (Array.isArray(raw?.items)) {
-    logPick('raw.items', raw.items);
-    return raw.items;
-  }
-  // 5) raw.events ?
-  if (Array.isArray(raw?.events)) {
-    logPick('raw.events', raw.events);
-    return raw.events;
-  }
-  // 6) raw lui-même est un tableau ?
-  if (Array.isArray(raw)) {
-    logPick('raw (self)', raw);
-    return raw;
-  }
-  console.log('[CalculDispo] no events array found in known locations');
-  return [];
-}
+  // cas 1 : réponse directe
+  if (Array.isArray(raw)) arr = raw as EdtItem[];
 
-/**
- * Extraction des infos quotidiennes depuis json.data (enveloppe variable).
- * Règles :
- *  - on ignore les créneaux "PERMANENCE" pour déterminer l'heure de sortie.
- *  - si la journée est un CONGE (aucun autre type), alors:
- *      -> sortie = null, conge = true (score = 3 plus tard).
- */
-function extractDailyInfo(raw: any): DailyInfo {
-  console.log(
-    '[CalculDispo] extractDailyInfo: raw keys =',
-    raw && typeof raw === 'object' ? Object.keys(raw) : raw,
-  );
+  // cas 2 : { data: [...] }
+  if (!arr.length && Array.isArray(raw?.data)) arr = raw.data as EdtItem[];
 
-  const events = resolveEventsArray(raw);
-  type Ev = { type: string; endMins: number; endHHMM: string; day: string };
-  const evs: Ev[] = [];
+  // cas 3 : { code, token, data: [...] } (payload ED « brut »)
+  if (!arr.length && raw?.data && Array.isArray(raw?.data)) arr = raw.data as EdtItem[];
 
-  for (const ev of events) {
-    const end = ev?.end_date as string | undefined;
-    const start = ev?.start_date as string | undefined;
-    const day = (end ?? start)?.slice?.(0, 10);
-    const type = String(ev?.typeCours || '').toUpperCase();
-    const hhmm = end ? hhmmFromDateStr(end) : null;
-    const mins = hhmm ? toMinutes(hhmm) : null;
-    if (!day || !hhmm || mins == null) continue;
-    evs.push({ type, endMins: mins, endHHMM: hhmm, day });
+  // Si toujours rien => abandon
+  if (!arr.length) {
+    console.log('[CalculDispo] format inattendu (pas de .data array) -> aucun calcul');
+    return {};
   }
 
-  console.log('[CalculDispo] parsed events count =', evs.length);
+  // Construire un map par date
+  const byDate = new Map<string, { ends: number[]; conge: boolean }>();
 
-  const out: DailyInfo = {};
-  const byDay = new Map<string, Ev[]>();
-  for (const e of evs) {
-    if (!byDay.has(e.day)) byDay.set(e.day, []);
-    byDay.get(e.day)!.push(e);
-  }
+  for (const it of arr) {
+    if (!it?.start_date || !it?.end_date) continue;
 
-  for (const [day, list] of byDay.entries()) {
-    // Journée 100% CONGE ?
-    const hasNonConge = list.some((e) => e.type !== 'CONGE');
-    const hasConge = list.some((e) => e.type === 'CONGE');
+    const date = String(it.start_date).slice(0, 10); // YYYY-MM-DD
+    const endMin = toMinutes(String(it.end_date));
+    const type = (it.typeCours || '').toUpperCase();
 
-    if (!hasNonConge && hasConge) {
-      out[day] = { sortie: null, conge: true };
-      console.log(`[CalculDispo] ${day} => CONGE (sortie=null)`);
-      continue;
+    if (!byDate.has(date)) byDate.set(date, { ends: [], conge: false });
+
+    // Jour de congé ?
+    if (type === 'CONGE') {
+      const cur = byDate.get(date)!;
+      cur.conge = true;
+      byDate.set(date, cur);
+      continue; // ne pas ajouter de fin
     }
 
-    // Dernier créneau NON PERMANENCE et NON CONGE
-    const lastNonPerm = list
-      .filter((e) => e.type !== 'PERMANENCE' && e.type !== 'CONGE')
-      .sort((a, b) => a.endMins - b.endMins)
-      .at(-1);
+    // Exclure PERMANENCE des fins de journée
+    if (type === 'PERMANENCE') continue;
 
-    if (lastNonPerm) {
-      out[day] = { sortie: lastNonPerm.endHHMM, conge: false };
-      console.log(`[CalculDispo] ${day} => ${lastNonPerm.endHHMM} (dernier non-PERMANENCE/CONGE)`);
+    if (endMin != null) {
+      const cur = byDate.get(date)!;
+      cur.ends.push(endMin);
+      byDate.set(date, cur);
+    }
+  }
+
+  // Construire le résultat normalisé
+  const out: Record<string, { end: string | null; conge: boolean }> = {};
+  for (const [date, { ends, conge }] of byDate.entries()) {
+    if (conge) {
+      out[date] = { end: null, conge: true };
+    } else if (ends.length) {
+      const last = Math.max(...ends);
+      const h = Math.floor(last / 60);
+      const m = last % 60;
+      out[date] = {
+        end: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+        conge: false,
+      };
     } else {
-      // Seulement PERMANENCE (ou vide) -> sortie null, conge=false
-      out[day] = { sortie: null, conge: false };
-      console.log(`[CalculDispo] ${day} => uniquement PERMANENCE/aucun (sortie=null)`);
+      // aucun cours utile ce jour (ni conge) -> end=null
+      out[date] = { end: null, conge: false };
     }
   }
 
-  console.log('[CalculDispo] dailyInfo =', out);
+  console.log('[CalculDispo] map-by-date keys found =', Object.keys(out).length);
   return out;
 }
 
-export default function CalculDispo(
-  props: { token?: string | null; eleveId?: number | null } = {},
-) {
-  const [token, setToken] = useState<string | null>(props.token ?? null);
-  const [eleveId, setEleveId] = useState<number | null>(props.eleveId ?? null);
+// Calcule le score base selon règles en vigueur
+function scoreBaseFor(endTimeStr: string | null, conge: boolean): number {
+  if (conge) return 3;
+  if (!endTimeStr) return 1; // par défaut s’il n’y a pas d’heure détectée
+  const mins = toMinutes(`1970-01-01 ${endTimeStr}`) ?? 0; // réutilise le parseur
+  if (mins < 15 * 60) return 2;
+  if (mins > 15 * 60 && mins < 16 * 60) return 1.5; // strictement entre 15:00 et 16:00
+  return 1;
+}
 
+export default function CalculDispo() {
+  const [{ token, eleveId }, setAuth] = useState(getTokenAndEleveId);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  const [rows, setRows] = useState<Row[]>([]);
-  const [dailyInfo, setDailyInfo] = useState<DailyInfo>({});
-  const [rawSample, setRawSample] = useState<any>(null);
+  const [raw, setRaw] = useState<any | null>(null);
+  const [agendaItems, setAgendaItems] = useState<AgendaPersoItem[]>([]);
+  const [loadingAgenda, setLoadingAgenda] = useState(false);
+  const [errAgenda, setErrAgenda] = useState<string | null>(null);
 
-  // fallback: sessionStorage si pas de props
+  // fenêtre 4 semaines à partir d’aujourd’hui
+  const [win, setWin] = useState<{ start: string; end: string }>(() => {
+    const start = new Date();
+    const end = new Date();
+    end.setDate(start.getDate() + 28);
+    return { start: ymd(start), end: ymd(end) };
+  });
+
   useEffect(() => {
-    if (props.token != null || props.eleveId != null) return;
-    try {
-      const t = sessionStorage.getItem('ed_token');
-      const sid = sessionStorage.getItem('ed_selected_eleve_id');
-      console.log('[CalculDispo] session token =', !!t, 'selected_eleve_id =', sid);
-      setToken(t);
-      setEleveId(sid ? Number(sid) : null);
-    } catch {}
-  }, [props.token, props.eleveId]);
+    console.log('[CalculDispo] window', win);
+  }, [win]);
 
-  // fenêtre [aujourd'hui, +28 jours] Europe/Paris
-  const { dateDebut, dateFin } = useMemo(() => {
-    const today = new Date();
-    const start = fmtDateParisISO(today);
-    const end = fmtDateParisISO(addDaysParis(today, 28));
-    console.log('[CalculDispo] window', { start, end });
-    return { dateDebut: start, dateFin: end };
+  // Récup token/élève si storage change
+  useEffect(() => {
+    const onStorage = () => setAuth(getTokenAndEleveId());
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
+  // Charger EDT
   useEffect(() => {
     let aborted = false;
-
     async function run() {
-      if (!token || !eleveId) {
-        console.log('[CalculDispo] manque token ou eleveId', { token, eleveId });
-        return;
-      }
+      if (!token || !eleveId) return;
       setLoading(true);
-      setError(null);
-      setRows([]);
-      setDailyInfo({});
-      setRawSample(null);
-
+      setErr(null);
       try {
-        const body = { token, eleveId, dateDebut, dateFin, avecTrous: true };
+        const body = {
+          token,
+          eleveId,
+          dateDebut: win.start,
+          dateFin: win.end,
+          avecTrous: true,
+        };
         console.log('[CalculDispo] fetch /api/ed/edt body =', body);
         const res = await fetch('/api/ed/edt', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'content-type': 'application/json' },
           body: JSON.stringify(body),
         });
         const json: EdtResponse = await res.json();
         console.log('[CalculDispo] /api/ed/edt status=', res.status, 'ok=', json?.ok);
-        if (!json?.ok) {
-          console.log('[CalculDispo] edt error payload =', json);
-          throw new Error(json?.message || `Échec de la récupération (status ${json?.status})`);
-        }
-
-        // json.data est l’enveloppe renvoyée par la route
-        setRawSample(json.data);
-
-        // 👉 on passe json.data à l’extracteur (qui résout l’array d’événements)
-        const info = extractDailyInfo(json.data);
-        if (aborted) return;
-
-        setDailyInfo(info);
-
-        // Construire le tableau + scoring (règles demandées)
-        const dates = Object.keys(info).sort();
-        const computed: Row[] = dates.map((d) => {
-          const isConge = !!info[d]?.conge;
-          const sortie = info[d]?.sortie ?? '—';
-
-          let score: number;
-          if (isConge) {
-            score = 3;
-          } else if (!info[d]?.sortie) {
-            score = 0;
-          } else {
-            const mins = toMinutes(info[d]!.sortie!) ?? 24 * 60;
-            const s1500 = 15 * 60;
-            const s1600 = 16 * 60;
-            const s1800 = 18 * 60;
-
-            if (mins < s1500) score = 2;
-            else if (mins > s1500 && mins < s1600) score = 1.5;
-            else if (mins >= s1600 && mins < s1800) score = 1;
-            else score = 0;
-          }
-
-          return { date: d, sortie, score };
-        });
-
-        console.log('[CalculDispo] rows (with latest scoring) =', computed);
-        if (!aborted) setRows(computed);
+        if (!res.ok || !json?.ok) throw new Error(`Échec EDT (status ${res.status})`);
+        if (!aborted) setRaw(json.data);
       } catch (e: any) {
-        console.error('[CalculDispo] run() error:', e);
-        if (!aborted) setError(e?.message || "Erreur pendant le chargement de l'emploi du temps.");
+        if (!aborted) setErr(e?.message || 'Erreur chargement EDT');
       } finally {
         if (!aborted) setLoading(false);
       }
     }
-
     run();
     return () => {
       aborted = true;
     };
-  }, [token, eleveId, dateDebut, dateFin]);
+  }, [token, eleveId, win]);
+
+  // Charger agenda_perso
+  useEffect(() => {
+    let aborted = false;
+    async function run() {
+      if (!eleveId) return;
+      setLoadingAgenda(true);
+      setErrAgenda(null);
+      try {
+        const res = await fetch('/api/agenda_perso/list', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ eleveId }),
+          cache: 'no-store',
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+        if (!aborted) setAgendaItems(json.items || []);
+      } catch (e: any) {
+        if (!aborted) setErrAgenda(e?.message || 'Erreur chargement agenda perso');
+      } finally {
+        if (!aborted) setLoadingAgenda(false);
+      }
+    }
+    run();
+    return () => {
+      aborted = true;
+    };
+  }, [eleveId]);
+
+  // Set de jours de semaine (1..7) qui ont au moins un event perso
+  const daysWithPersonalEvent: Set<number> = useMemo(() => {
+    const set = new Set<number>();
+    for (const it of agendaItems || []) {
+      for (const d of it.days || []) {
+        const n = Number(d);
+        if (Number.isFinite(n) && n >= 1 && n <= 7) set.add(n);
+      }
+    }
+    return set;
+  }, [agendaItems]);
+
+  // Extraction + calcul des scores
+  const rows: Row[] = useMemo(() => {
+    if (!raw) return [];
+    const byDate = extractDailyInfo(raw); // { date: { end, conge } }
+
+    const dates = Object.keys(byDate).sort();
+    const out: Row[] = [];
+
+    for (const date of dates) {
+      const { end, conge } = byDate[date];
+      const base = scoreBaseFor(end, conge);
+
+      const wd = weekday1to7(date);
+      const perso = daysWithPersonalEvent.has(wd) ? -1 : 0;
+
+      out.push({
+        date,
+        endTimeStr: end,
+        scoreBase: base,
+        scorePerso: perso,
+        scoreTotal: base + perso,
+        conge,
+      });
+    }
+
+    console.log('[CalculDispo] rows (with agenda perso) =', out);
+    return out;
+  }, [raw, daysWithPersonalEvent]);
 
   return (
     <section className="rounded-2xl border p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium">Disponibilités (prochaines 4 semaines)</h3>
+        <h2 className="text-lg font-medium">Calcul dispo (4 semaines)</h2>
       </div>
 
-      {!token || !eleveId ? (
-        <div className="rounded-lg border p-4 text-sm">Token ou identifiant élève manquant.</div>
-      ) : loading ? (
-        <div className="rounded-lg border p-4 text-sm">Chargement de l'emploi du temps…</div>
-      ) : error ? (
-        <div className="rounded-lg border p-4 text-sm text-red-600">Erreur : {error}</div>
-      ) : (
-        <>
-          {/* ✅ Tableau principal (date, heure de sortie, score) */}
-          {rows.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b">
-                    <th className="py-2 pr-4">Date</th>
-                    <th className="py-2 pr-4">Heure de sortie</th>
-                    <th className="py-2 pr-4">Score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.date} className="border-b last:border-b-0">
-                      <td className="py-2 pr-4">
-                        {new Intl.DateTimeFormat('fr-FR', {
-                          timeZone: 'Europe/Paris',
-                          weekday: 'long',
-                          day: '2-digit',
-                          month: 'long',
-                        }).format(new Date(r.date))}
-                        <span className="opacity-60"> ({r.date})</span>
-                        {dailyInfo[r.date]?.conge ? (
-                          <span className="ml-2 text-xs px-2 py-0.5 rounded-full border">
-                            CONGÉ
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="py-2 pr-4">{r.sortie}</td>
-                      <td className="py-2 pr-4">
-                        <span className="px-2 py-0.5 rounded-full border">{r.score}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="rounded-lg border p-4 text-sm">Aucune donnée sur la période.</div>
-          )}
+      {(!token || !eleveId) && (
+        <div className="rounded-lg border p-4 text-sm">
+          Impossible de calculer : token ou élève non défini.
+        </div>
+      )}
 
-          {/* 🔎 Bloc DEBUG */}
-          <details className="rounded-lg border p-4 text-xs open:space-y-2">
-            <summary className="cursor-pointer">DEBUG · heures de sortie / structure EDT</summary>
+      {loading && <div className="rounded-lg border p-4 text-sm">Chargement EDT…</div>}
+      {err && <div className="rounded-lg border p-4 text-sm text-red-600">Erreur EDT : {err}</div>}
 
-            <div>
-              <div className="font-medium mb-1">Heures de sortie par jour :</div>
-              {Object.keys(dailyInfo).length > 0 ? (
-                <ul className="list-disc ml-5">
-                  {Object.keys(dailyInfo)
-                    .sort()
-                    .map((d) => (
-                      <li key={d}>
-                        <code>{d}</code> → <strong>{dailyInfo[d].sortie ?? '—'}</strong>
-                        {dailyInfo[d].conge ? '  (CONGE)' : ''}
-                      </li>
-                    ))}
-                </ul>
-              ) : (
-                <div>Aucune heure détectée (vérifie les logs console).</div>
-              )}
-            </div>
+      {loadingAgenda && (
+        <div className="rounded-lg border p-4 text-sm">Chargement agenda perso…</div>
+      )}
+      {errAgenda && (
+        <div className="rounded-lg border p-4 text-sm text-red-600">
+          Erreur agenda perso : {errAgenda}
+        </div>
+      )}
 
-            <div className="mt-3">
-              <div className="font-medium mb-1">Clés top-level de json.data :</div>
-              <pre className="whitespace-pre-wrap">
-                {rawSample && typeof rawSample === 'object'
-                  ? JSON.stringify(Object.keys(rawSample), null, 2)
-                  : String(rawSample)}
-              </pre>
-            </div>
+      {!loading && !err && rows.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b">
+                <th className="py-2 pr-3">Date</th>
+                <th className="py-2 pr-3">Heure de sortie</th>
+                <th className="py-2 pr-3">Score base</th>
+                <th className="py-2 pr-3">Score perso</th>
+                <th className="py-2 pr-3">Score total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.date} className="border-b last:border-0">
+                  <td className="py-2 pr-3 font-medium">{r.date}</td>
+                  <td className="py-2 pr-3">
+                    {r.conge ? (
+                      <span className="italic opacity-70">CONGÉS</span>
+                    ) : (
+                      r.endTimeStr ?? '—'
+                    )}
+                  </td>
+                  <td className="py-2 pr-3">{r.scoreBase}</td>
+                  <td className="py-2 pr-3">{r.scorePerso}</td>
+                  <td className="py-2 pr-3 font-semibold">{r.scoreTotal}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-            <div className="mt-3">
-              <div className="font-medium mb-1">Aperçu (json.data) :</div>
-              <pre className="whitespace-pre-wrap overflow-x-auto max-h-64">
-                {JSON.stringify(rawSample, null, 2)}
-              </pre>
-            </div>
-          </details>
-        </>
+      {!loading && !err && rows.length === 0 && (
+        <div className="rounded-lg border p-4 text-sm">Aucune donnée sur la période.</div>
       )}
     </section>
   );
