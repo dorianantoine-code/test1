@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [weekScore, setWeekScore] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -116,8 +117,15 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               </section>
-              {/* Disponibilités (prochaines 4 semaines) */}
-              <CalculDispo token={token} eleveId={selectedId} />
+              {weekScore !== null && (
+                <div className="rounded-xl border p-4 bg-gray-50">
+                  <div className="text-sm opacity-70">Score dispo (jusqu’au jeudi)</div>
+                  <div className="text-xl font-semibold">{weekScore}</div>
+                </div>
+              )}
+
+              {/* Passe le callback pour récupérer la valeur */}
+              <CalculDispo onAggregateScore={(score) => setWeekScore(score)} />
               {/* Liste les devoirs */}
               <DevoirsPanel />
             </>

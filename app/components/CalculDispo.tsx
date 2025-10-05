@@ -55,47 +55,45 @@ function ymd(date: Date) {
 
 // Convert "YYYY-MM-DD HH:mm" to minutes since midnight
 function toMinutes(str: string): number | null {
-  // robust parsing
   if (!str) return null;
-  const [d, hm] = str.split(' ');
-  if (!hm) return null;
+  const parts = str.split(' ');
+  const hm = parts.length === 2 ? parts[1] : parts[0]; // tolère "HH:mm"
   const [h, m] = hm.split(':').map((x) => parseInt(x, 10));
   if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 60 + m;
 }
 
-// Jour de semaine 1..7 (1=lundi ... 7=dimanche)
-// Utilise 12:00 locale pour éviter les surprises de fuseau.
+// Jour de semaine 1..7 (1=lundi … 7=dimanche)
 function weekday1to7(dateYMD: string): number {
   const dt = new Date(`${dateYMD}T12:00:00`);
   const js = dt.getDay(); // 0=Sun..6=Sat
   return js === 0 ? 7 : js; // 1..7
 }
 
-// Extrait la dernière heure de fin par journée (en excluant PERMANENCE) et
-// détecte les jours CONGE. Retourne un objet { [date]: { end: 'HH:mm' | null, conge: boolean } }
+// Jeudi prochain (ou aujourd’hui si on est déjà jeudi)
+function nextThursdayFrom(today: Date): Date {
+  const wd0 = today.getDay(); // 0=dim…6=sam
+  const wd = wd0 === 0 ? 7 : wd0; // 1..7
+  const THURSDAY = 4; // 1=lun … 4=jeu … 7=dim
+  const delta = (THURSDAY - wd + 7) % 7; // 0 si déjà jeudi
+  const d = new Date(today);
+  d.setDate(today.getDate() + delta);
+  return d;
+}
+
+// Extrait { [date]: { end: 'HH:mm' | null, conge: boolean } } en excluant PERMANENCE
 function extractDailyInfo(raw: any): Record<string, { end: string | null; conge: boolean }> {
   console.log('[CalculDispo] extractDailyInfo: raw keys =', Object.keys(raw || {}));
 
-  // Trouver un tableau de séances quelque part dans la réponse
   let arr: EdtItem[] = [];
-
-  // cas 1 : réponse directe
   if (Array.isArray(raw)) arr = raw as EdtItem[];
-
-  // cas 2 : { data: [...] }
   if (!arr.length && Array.isArray(raw?.data)) arr = raw.data as EdtItem[];
 
-  // cas 3 : { code, token, data: [...] } (payload ED « brut »)
-  if (!arr.length && raw?.data && Array.isArray(raw?.data)) arr = raw.data as EdtItem[];
-
-  // Si toujours rien => abandon
   if (!arr.length) {
     console.log('[CalculDispo] format inattendu (pas de .data array) -> aucun calcul');
     return {};
   }
 
-  // Construire un map par date
   const byDate = new Map<string, { ends: number[]; conge: boolean }>();
 
   for (const it of arr) {
@@ -107,7 +105,6 @@ function extractDailyInfo(raw: any): Record<string, { end: string | null; conge:
 
     if (!byDate.has(date)) byDate.set(date, { ends: [], conge: false });
 
-    // Jour de congé ?
     if (type === 'CONGE') {
       const cur = byDate.get(date)!;
       cur.conge = true;
@@ -115,8 +112,7 @@ function extractDailyInfo(raw: any): Record<string, { end: string | null; conge:
       continue; // ne pas ajouter de fin
     }
 
-    // Exclure PERMANENCE des fins de journée
-    if (type === 'PERMANENCE') continue;
+    if (type === 'PERMANENCE') continue; // exclut permanence
 
     if (endMin != null) {
       const cur = byDate.get(date)!;
@@ -125,7 +121,6 @@ function extractDailyInfo(raw: any): Record<string, { end: string | null; conge:
     }
   }
 
-  // Construire le résultat normalisé
   const out: Record<string, { end: string | null; conge: boolean }> = {};
   for (const [date, { ends, conge }] of byDate.entries()) {
     if (conge) {
@@ -139,7 +134,6 @@ function extractDailyInfo(raw: any): Record<string, { end: string | null; conge:
         conge: false,
       };
     } else {
-      // aucun cours utile ce jour (ni conge) -> end=null
       out[date] = { end: null, conge: false };
     }
   }
@@ -148,17 +142,21 @@ function extractDailyInfo(raw: any): Record<string, { end: string | null; conge:
   return out;
 }
 
-// Calcule le score base selon règles en vigueur
+// Règles score base : CONGÉS=3 ; <15:00 => 2 ; (15:00,16:00) => 1.5 ; sinon 1
 function scoreBaseFor(endTimeStr: string | null, conge: boolean): number {
   if (conge) return 3;
-  if (!endTimeStr) return 1; // par défaut s’il n’y a pas d’heure détectée
-  const mins = toMinutes(`1970-01-01 ${endTimeStr}`) ?? 0; // réutilise le parseur
+  if (!endTimeStr) return 1;
+  const mins = toMinutes(`1970-01-01 ${endTimeStr}`) ?? 0;
   if (mins < 15 * 60) return 2;
-  if (mins > 15 * 60 && mins < 16 * 60) return 1.5; // strictement entre 15:00 et 16:00
+  if (mins > 15 * 60 && mins < 16 * 60) return 1.5;
   return 1;
 }
 
-export default function CalculDispo() {
+type Props = {
+  onAggregateScore?: (score: number, from: string, to: string) => void;
+};
+
+export default function CalculDispo({ onAggregateScore }: Props) {
   const [{ token, eleveId }, setAuth] = useState(getTokenAndEleveId);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -168,8 +166,8 @@ export default function CalculDispo() {
   const [loadingAgenda, setLoadingAgenda] = useState(false);
   const [errAgenda, setErrAgenda] = useState<string | null>(null);
 
-  // fenêtre 4 semaines à partir d’aujourd’hui
-  const [win, setWin] = useState<{ start: string; end: string }>(() => {
+  // fenêtre 4 semaines rolling
+  const [win] = useState<{ start: string; end: string }>(() => {
     const start = new Date();
     const end = new Date();
     end.setDate(start.getDate() + 28);
@@ -177,17 +175,12 @@ export default function CalculDispo() {
   });
 
   useEffect(() => {
-    console.log('[CalculDispo] window', win);
-  }, [win]);
-
-  // Récup token/élève si storage change
-  useEffect(() => {
     const onStorage = () => setAuth(getTokenAndEleveId());
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // Charger EDT
+  // EDT
   useEffect(() => {
     let aborted = false;
     async function run() {
@@ -195,13 +188,7 @@ export default function CalculDispo() {
       setLoading(true);
       setErr(null);
       try {
-        const body = {
-          token,
-          eleveId,
-          dateDebut: win.start,
-          dateFin: win.end,
-          avecTrous: true,
-        };
+        const body = { token, eleveId, dateDebut: win.start, dateFin: win.end, avecTrous: true };
         console.log('[CalculDispo] fetch /api/ed/edt body =', body);
         const res = await fetch('/api/ed/edt', {
           method: 'POST',
@@ -222,9 +209,9 @@ export default function CalculDispo() {
     return () => {
       aborted = true;
     };
-  }, [token, eleveId, win]);
+  }, [token, eleveId, win.start, win.end]);
 
-  // Charger agenda_perso
+  // agenda_perso
   useEffect(() => {
     let aborted = false;
     async function run() {
@@ -242,7 +229,7 @@ export default function CalculDispo() {
         if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
         if (!aborted) setAgendaItems(json.items || []);
       } catch (e: any) {
-        if (!aborted) setErrAgenda(e?.message || 'Erreur chargement agenda perso');
+        if (!aborted) setErrAgenda(e?.message || 'Erreur agenda perso');
       } finally {
         if (!aborted) setLoadingAgenda(false);
       }
@@ -253,7 +240,7 @@ export default function CalculDispo() {
     };
   }, [eleveId]);
 
-  // Set de jours de semaine (1..7) qui ont au moins un event perso
+  // jours avec événement perso
   const daysWithPersonalEvent: Set<number> = useMemo(() => {
     const set = new Set<number>();
     for (const it of agendaItems || []) {
@@ -265,39 +252,67 @@ export default function CalculDispo() {
     return set;
   }, [agendaItems]);
 
-  // Extraction + calcul des scores
+  // lignes + scores
   const rows: Row[] = useMemo(() => {
     if (!raw) return [];
-    const byDate = extractDailyInfo(raw); // { date: { end, conge } }
-
+    const byDate = extractDailyInfo(raw);
     const dates = Object.keys(byDate).sort();
     const out: Row[] = [];
-
     for (const date of dates) {
       const { end, conge } = byDate[date];
       const base = scoreBaseFor(end, conge);
-
       const wd = weekday1to7(date);
       const perso = daysWithPersonalEvent.has(wd) ? -1 : 0;
-
       out.push({
         date,
-        endTimeStr: end,
+        endTimeStr: conge ? null : end,
         scoreBase: base,
         scorePerso: perso,
         scoreTotal: base + perso,
         conge,
       });
     }
-
-    console.log('[CalculDispo] rows (with agenda perso) =', out);
     return out;
   }, [raw, daysWithPersonalEvent]);
+
+  // agrégat aujourd’hui → jeudi prochain
+  const { aggFrom, aggTo, aggregateScore } = useMemo(() => {
+    const today = new Date();
+    const from = ymd(today);
+    const to = ymd(nextThursdayFrom(today)); // <-- jeudi
+    const score = rows
+      .filter((r) => r.date >= from && r.date <= to)
+      .reduce((acc, r) => acc + r.scoreTotal, 0);
+    return { aggFrom: from, aggTo: to, aggregateScore: score };
+  }, [rows]);
+
+  // expose au parent + sessionStorage
+  useEffect(() => {
+    if (typeof aggregateScore === 'number') {
+      onAggregateScore?.(aggregateScore, aggFrom, aggTo);
+      try {
+        sessionStorage.setItem('calcdispo_week_score', String(aggregateScore));
+        sessionStorage.setItem('calcdispo_week_from', aggFrom);
+        sessionStorage.setItem('calcdispo_week_to', aggTo);
+      } catch {}
+    }
+  }, [aggregateScore, aggFrom, aggTo, onAggregateScore]);
 
   return (
     <section className="rounded-2xl border p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">Calcul dispo (4 semaines)</h2>
+      </div>
+
+      {/* Score agrégé semaine courante */}
+      <div className="rounded-xl border p-4 bg-gray-50">
+        <div className="text-sm opacity-70">Score total (aujourd’hui → jeudi prochain)</div>
+        <div className="text-2xl font-semibold">
+          {aggregateScore.toFixed(2)}{' '}
+          <span className="text-base font-normal opacity-70">
+            ({aggFrom} → {aggTo})
+          </span>
+        </div>
       </div>
 
       {(!token || !eleveId) && (
