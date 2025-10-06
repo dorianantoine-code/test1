@@ -8,6 +8,7 @@ import styles from '../styles/readable.module.css';
 import StudentHeader from '../components/ui/StudentHeader';
 import DevoirsPanel from '../components/DevoirsPanel';
 import CalculDispo from '../components/CalculDispo';
+/* Exemple dans ton Dashboard/DevoirsPanel */
 
 type LoginData = { account?: any; accounts?: any[]; token?: string };
 
@@ -123,7 +124,7 @@ export default function DashboardPage() {
                   <div className="text-xl font-semibold">{weekScore}</div>
                 </div>
               )}
-
+   
               {/* Passe le callback pour récupérer la valeur */}
               <CalculDispo onAggregateScore={(score) => setWeekScore(score)} />
               {/* Liste les devoirs */}

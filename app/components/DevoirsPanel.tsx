@@ -318,7 +318,7 @@ export default function DevoirsPanel() {
                       <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
                       <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
                       <td className="py-2 pr-3">
-                        {dv.a_faire ? chip('Oui', 'green') : chip('Non', 'amber')}
+                        {dv.effectue ? chip('Oui', 'green') : chip('Non', 'amber')}
                       </td>
                       <td className="py-2 pr-3">
                         {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
