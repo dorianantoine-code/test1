@@ -190,6 +190,7 @@ export default function DashboardPage() {
               { href: '/dashboard', label: 'Dashboard' },
               { href: '/ed/agenda', label: 'EDT' },
               { href: '/ed/cdt', label: 'CDT' },
+              { href: '/configuration', label: 'Configuration' },
               { href: '/ed/eleves', label: 'Élèves' },
               { href: '/', label: 'Déconnexion' },
             ]}
