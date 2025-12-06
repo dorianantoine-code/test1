@@ -146,7 +146,11 @@ export default function AgendaPersoPage() {
   function startEdit(row: APEvent) {
     setEditingId(row.id);
     setEditType(row.event_type);
-    setEditDays(row.days || []);
+    // normalise en nombres pour que .includes fonctionne
+    const normalizedDays = Array.from(
+      new Set((row.days || []).map((d) => (typeof d === 'string' ? parseInt(d, 10) : Number(d)))),
+    ).filter((n) => Number.isFinite(n));
+    setEditDays(normalizedDays);
     setEditNote(row.note || '');
   }
   function cancelEdit() {
@@ -261,8 +265,10 @@ export default function AgendaPersoPage() {
                       <label
                         key={d.value}
                         className={[
-                          'px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none',
-                          checked ? 'bg-black text-white' : 'hover:bg-black/5',
+                          'px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none transition-colors',
+                          checked
+                            ? 'bg-emerald-100 border-emerald-200 text-emerald-900'
+                            : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50',
                         ].join(' ')}
                       >
                         <input
@@ -377,8 +383,10 @@ export default function AgendaPersoPage() {
                                   <label
                                     key={d.value}
                                     className={[
-                                      'px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none',
-                                      checked ? 'bg-black text-white' : 'hover:bg-black/5',
+                                      'px-3 py-1.5 rounded-full border text-sm cursor-pointer select-none transition-colors',
+                                      checked
+                                        ? 'bg-emerald-100 border-emerald-200 text-emerald-900'
+                                        : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50',
                                     ].join(' ')}
                                   >
                                     <input
