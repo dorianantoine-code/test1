@@ -35,16 +35,17 @@ type CDTResponse = {
 
 type Body = {
   eleveId: number; // ed_eleve_id
-  ed_account_id?: number;
+  etablissement?: string | null;
   cdtData: CDTResponse; // payload ED groupé par date
 };
 
 /* === Utils === */
 const nowISO = () => new Date().toISOString();
 
-function toRow(item: EDDevoirItem, dueDate: string, ed_eleve_id: number, ed_account_id?: number) {
+function toRow(item: EDDevoirItem, dueDate: string, ed_eleve_id: number, etablissement: string) {
   const r: any = {
     ed_eleve_id,
+    etablissement,
     ed_devoir_id: Number(item.idDevoir),
     due_date: dueDate,
     matiere: item.matiere ?? null,
@@ -58,7 +59,6 @@ function toRow(item: EDDevoirItem, dueDate: string, ed_eleve_id: number, ed_acco
     last_sync_at: nowISO(),
     raw: item as any,
   };
-  if (typeof ed_account_id === 'number') r.ed_account_id = ed_account_id;
   return r;
 }
 
@@ -66,18 +66,14 @@ function toRow(item: EDDevoirItem, dueDate: string, ed_eleve_id: number, ed_acco
 async function readState(
   ed_eleve_id: number,
   ids: number[],
-  useTripleKey: boolean,
-  ed_account_id?: number,
+  etablissement: string,
 ) {
   let q = supabase
     .from(TABLE_NAME)
-    .select('ed_account_id,ed_eleve_id,ed_devoir_id,effectue,date_realisation,last_sync_at')
+    .select('ed_eleve_id,etablissement,ed_devoir_id,effectue,date_realisation,last_sync_at')
     .eq('ed_eleve_id', ed_eleve_id)
+    .eq('etablissement', etablissement)
     .in('ed_devoir_id', ids);
-
-  if (useTripleKey && typeof ed_account_id === 'number') {
-    q = q.eq('ed_account_id', ed_account_id);
-  }
 
   const { data, error } = await q;
   if (error) throw new Error(`readState error: ${error.message}`);
@@ -99,14 +95,16 @@ async function tryUpsert(rows: any[], onConflict: string) {
 
 /* === Handler === */
 export async function POST(req: NextRequest) {
-  let body: Body | any;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
-  }
+    let body: Body | any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
 
-  const { eleveId, ed_account_id: accMaybe, cdtData } = body as Body;
+    const { eleveId, cdtData } = body as Body;
+    const etablissement = (body as any)?.etablissement ? String((body as any).etablissement) : null;
 
   if (
     typeof eleveId !== 'number' ||
@@ -120,101 +118,109 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const ed_eleve_id = Number(eleveId);
-  const ed_account_id = typeof accMaybe === 'number' ? Number(accMaybe) : undefined;
-  const useTripleKey = typeof ed_account_id === 'number';
+    const ed_eleve_id = Number(eleveId);
+    let etab = etablissement?.trim() || null;
+
+    if (!etab) {
+      // récupérer etablissement via eleve
+      const { data: eData, error: eErr } = await supabase
+        .from('eleve')
+        .select('etablissement')
+        .eq('ed_eleve_id', ed_eleve_id)
+        .maybeSingle();
+      if (eErr) {
+        return NextResponse.json({ error: `Lookup eleve: ${eErr.message}` }, { status: 500 });
+      }
+      etab = eData?.etablissement || null;
+    }
+
+    if (!etab) {
+      return NextResponse.json(
+        { error: "Etablissement introuvable pour l'élève" },
+        { status: 400 },
+      );
+    }
 
   // Aplatir
-  const rows: any[] = [];
-  const ids: number[] = [];
-  for (const [date, items] of Object.entries(cdtData.data)) {
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
-      if (item?.idDevoir == null) continue;
-      const id = Number(item.idDevoir);
-      ids.push(id);
-      rows.push(toRow(item, date, ed_eleve_id, ed_account_id));
+    const rows: any[] = [];
+    const ids: number[] = [];
+    for (const [date, items] of Object.entries(cdtData.data)) {
+      if (!Array.isArray(items)) continue;
+      for (const item of items) {
+        if (item?.idDevoir == null) continue;
+        const id = Number(item.idDevoir);
+        ids.push(id);
+        rows.push(toRow(item, date, ed_eleve_id, etab));
+      }
     }
-  }
 
-  if (!rows.length) {
-    return NextResponse.json({ ok: true, items: [], note: 'no rows' });
-  }
+    if (!rows.length) {
+      return NextResponse.json({ ok: true, items: [], note: 'no rows' });
+    }
 
   // LECTURE AVANT
-  let before: any[] = [];
-  try {
-    before = await readState(ed_eleve_id, ids, useTripleKey, ed_account_id);
-  } catch (e: any) {
-    // on log seulement
-    console.warn('[sync] read before failed:', e?.message || e);
-  }
-
-  // UPSERT
-  let mode: 'triple-key' | 'double-key' = 'double-key';
-  try {
-    if (useTripleKey) {
-      await tryUpsert(rows, 'ed_account_id,ed_eleve_id,ed_devoir_id');
-      mode = 'triple-key';
-    } else {
-      await tryUpsert(
-        rows.map(({ ed_account_id: _drop, ...r }) => r),
-        'ed_eleve_id,ed_devoir_id',
-      );
-      mode = 'double-key';
+    let before: any[] = [];
+    try {
+      before = await readState(ed_eleve_id, ids, etab);
+    } catch (e: any) {
+      // on log seulement
+      console.warn('[sync] read before failed:', e?.message || e);
     }
-  } catch (e: any) {
-    // fallback si la colonne ed_account_id n’existe pas réellement
-    const msg = String(e?.message ?? '');
-    if (useTripleKey && (msg.includes('ed_account_id') || msg.includes('schema cache'))) {
-      const rowsNoAcc = rows.map(({ ed_account_id: _drop, ...r }) => r);
-      await tryUpsert(rowsNoAcc, 'ed_eleve_id,ed_devoir_id');
-      mode = 'double-key';
-    } else {
+
+    // UPSERT
+    const mode = 'triple-key';
+    try {
+      await tryUpsert(rows, 'ed_eleve_id,etablissement,ed_devoir_id');
+    } catch (e: any) {
+      const msg = String(e?.message ?? '');
       return NextResponse.json({ error: `Upsert failed: ${msg}` }, { status: 500 });
     }
-  }
 
-  // LECTURE APRÈS
-  let after: any[] = [];
-  try {
-    after = await readState(ed_eleve_id, ids, useTripleKey, ed_account_id);
+    // LECTURE APRÈS
+    let after: any[] = [];
+    try {
+      const mode = 'triple-key';
+      after = await readState(ed_eleve_id, ids, etab);
+    } catch (e: any) {
+      return NextResponse.json({ error: `Read after failed: ${e?.message || e}` }, { status: 500 });
+    }
+
+    // CONSTRUCTION DE LA RÉPONSE: items “après”, triés par due_date + id
+    after.sort((a, b) => {
+      if (a.due_date === b.due_date) return a.ed_devoir_id - b.ed_devoir_id;
+      return String(a.due_date).localeCompare(String(b.due_date));
+    });
+
+    return NextResponse.json({
+      ok: true,
+      mode,
+      table: TABLE_NAME,
+      count: after.length,
+      items: after.map((r: any) => ({
+        ed_devoir_id: r.ed_devoir_id,
+        ed_eleve_id: r.ed_eleve_id,
+        due_date: r.due_date,
+        matiere: r.matiere,
+        code_matiere: r.code_matiere,
+        a_faire: r.a_faire,
+        effectue: r.effectue,
+        interrogation: r.interrogation,
+        documents_a_faire: r.documents_a_faire,
+        donne_le: r.donne_le,
+        rendre_en_ligne: r.rendre_en_ligne,
+        last_sync_at: r.last_sync_at,
+        coef_matiere: r.coef_matiere,
+        coef_controle: r.coef_controle,
+        score: r.score,
+        date_realisation: r.date_realisation ?? null,
+      })),
+      // before, // debug optionnel
+    });
   } catch (e: any) {
-    return NextResponse.json({ error: `Read after failed: ${e?.message || e}` }, { status: 500 });
+    console.error('[devoir/sync] unexpected error', e);
+    return NextResponse.json(
+      { error: e?.message || 'Unexpected server error (sync devoir)' },
+      { status: 500 },
+    );
   }
-
-  // CONSTRUCTION DE LA RÉPONSE: items “après”, triés par due_date + id
-  after.sort((a, b) => {
-    if (a.due_date === b.due_date) return a.ed_devoir_id - b.ed_devoir_id;
-    return String(a.due_date).localeCompare(String(b.due_date));
-  });
-
-  return NextResponse.json({
-    ok: true,
-    mode,
-    table: TABLE_NAME,
-    count: after.length,
-    // pour vérifier le problème de mise à jour:
-    // on renvoie uniquement ce qui est utile à contrôler
-    items: after.map((r: any) => ({
-      ed_devoir_id: r.ed_devoir_id,
-      ed_eleve_id: r.ed_eleve_id,
-      due_date: r.due_date,
-      matiere: r.matiere,
-      code_matiere: r.code_matiere,
-      a_faire: r.a_faire,
-      effectue: r.effectue,
-      interrogation: r.interrogation,
-      documents_a_faire: r.documents_a_faire,
-      donne_le: r.donne_le,
-      rendre_en_ligne: r.rendre_en_ligne,
-      last_sync_at: r.last_sync_at,
-      coef_matiere: r.coef_matiere,
-      coef_controle: r.coef_controle,
-      score: r.score,
-      date_realisation: r.date_realisation ?? null,
-    })),
-    // Debug optionnel (dé-commente si besoin)
-    // before,
-  });
 }

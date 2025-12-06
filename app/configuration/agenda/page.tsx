@@ -10,7 +10,7 @@ type EventType = 'Sport' | 'Musique' | 'Cours particulier' | 'Autres';
 type APEvent = {
   id: number;
   ed_eleve_id: number;
-  ed_account_id: number;
+  etablissement?: string | null;
   event_type: EventType;
   days: number[]; // 1..7
   note?: string | null;
@@ -43,6 +43,7 @@ function formatDays(days: number[]) {
 export default function AgendaPersoPage() {
   const [token, setToken] = useState<string | null>(null);
   const [eleveId, setEleveId] = useState<number | null>(null);
+  const [etablissement, setEtablissement] = useState<string | null>(null);
 
   // Formulaire ajout
   const [eventType, setEventType] = useState<EventType>('Sport');
@@ -67,8 +68,10 @@ export default function AgendaPersoPage() {
     try {
       const t = sessionStorage.getItem('ed_token');
       const sid = sessionStorage.getItem('ed_selected_eleve_id');
+      const etab = sessionStorage.getItem('ed_selected_eleve_etablissement');
       setToken(t);
       setEleveId(sid ? Number(sid) : null);
+      setEtablissement(etab || null);
     } catch {}
   }, []);
 
@@ -81,7 +84,7 @@ export default function AgendaPersoPage() {
       const res = await fetch('/api/agenda_perso/list', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ eleveId: Number(eleveId) }),
+        body: JSON.stringify({ eleveId: Number(eleveId), etablissement }),
         cache: 'no-store',
       });
       const json = await res.json();
@@ -119,6 +122,7 @@ export default function AgendaPersoPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           eleveId: Number(eleveId),
+          etablissement,
           eventType,
           days: selectedDays,
           note: note?.trim() || null,
@@ -162,6 +166,7 @@ export default function AgendaPersoPage() {
         body: JSON.stringify({
           id: editingId,
           eleveId: Number(eleveId),
+          etablissement,
           eventType: editType,
           days: editDays,
           note: editNote?.trim() || null,
@@ -187,7 +192,7 @@ export default function AgendaPersoPage() {
       const res = await fetch('/api/agenda_perso/delete', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id, eleveId: Number(eleveId) }),
+        body: JSON.stringify({ id, eleveId: Number(eleveId), etablissement }),
       });
       const json = await res.json();
       if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);

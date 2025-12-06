@@ -5,7 +5,6 @@ type Nullable<T> = T | null;
 
 export type EleveRow = {
   ed_eleve_id: string; // envoyés en STRING -> Postgres BIGINT
-  ed_account_id: string;
   prenom: Nullable<string>;
   nom: Nullable<string>;
   classe: Nullable<string>;
@@ -21,7 +20,11 @@ function val(...args: any[]) {
   return null;
 }
 
-export function mapEleveToRow(eleve: any, edAccountId?: string): EleveRow {
+export function mapEleveToRow(
+  eleve: any,
+  edAccountId?: string,
+  etablissementOverride?: string | null,
+): EleveRow {
   const idEleve = val(eleve?.id, eleve?.ideleve, eleve?.idEleve, eleve?.eleveId) ?? undefined;
   if (!idEleve) {
     console.error('[EleveUpsert] id élève manquant dans payload', Object.keys(eleve ?? {}));
@@ -46,13 +49,13 @@ export function mapEleveToRow(eleve: any, edAccountId?: string): EleveRow {
     eleve?.établissement?.nom,
     eleve?.etablissement,
     eleve?.nomEtablissement,
+    etablissementOverride,
   );
 
   const photoUrl = val(eleve?.photo, eleve?.photoUrl, eleve?.photo_url, eleve?.avatar);
 
   const row: EleveRow = {
     ed_eleve_id: String(idEleve),
-    ed_account_id: String(edAccountId ?? eleve?.ed_account_id ?? eleve?.accountId ?? ''),
     prenom: val(eleve?.prenom, eleve?.firstName),
     nom: val(eleve?.nom, eleve?.lastName),
     classe: classe,
@@ -63,13 +66,13 @@ export function mapEleveToRow(eleve: any, edAccountId?: string): EleveRow {
     raw: eleve,
   };
 
-  if (!row.ed_account_id) {
-    console.warn('[EleveUpsert] ed_account_id non fourni — recommande de le passer explicitement.');
+  if (!row.etablissement) {
+    console.error('[EleveUpsert] etablissement manquant dans payload élève');
+    throw new Error('mapEleveToRow: etablissement manquant');
   }
 
   console.log('[EleveUpsert] mapped', {
     ed_eleve_id: row.ed_eleve_id,
-    ed_account_id: row.ed_account_id,
     prenom: row.prenom,
     nom: row.nom,
     classe: row.classe,
@@ -81,7 +84,7 @@ export function mapEleveToRow(eleve: any, edAccountId?: string): EleveRow {
   return row;
 }
 
-export async function upsertEleve(row: EleveRow) {
+export async function upsertEleve(row: EleveRow, edAccountId?: string) {
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
@@ -89,7 +92,6 @@ export async function upsertEleve(row: EleveRow) {
     .upsert(
       {
         ed_eleve_id: row.ed_eleve_id,
-        ed_account_id: row.ed_account_id,
         prenom: row.prenom,
         nom: row.nom,
         classe: row.classe,
@@ -99,7 +101,7 @@ export async function upsertEleve(row: EleveRow) {
         last_seen_at: row.last_seen_at,
         raw: row.raw,
       },
-      { onConflict: 'ed_eleve_id', ignoreDuplicates: false },
+      { onConflict: 'ed_eleve_id,etablissement', ignoreDuplicates: false },
     )
     .select()
     .maybeSingle();
@@ -109,11 +111,33 @@ export async function upsertEleve(row: EleveRow) {
     throw error;
   }
 
+  if (edAccountId) {
+    const { error: linkErr } = await supabase
+      .from('compte_eleve')
+      .upsert(
+        {
+          ed_account_id: edAccountId,
+          ed_eleve_id: row.ed_eleve_id,
+          etablissement: row.etablissement!,
+        },
+        { onConflict: 'ed_account_id,ed_eleve_id,etablissement', ignoreDuplicates: false },
+      )
+      .select()
+      .maybeSingle();
+    if (linkErr) {
+      console.warn('[EleveUpsert] lien compte_eleve impossible', linkErr.message);
+    }
+  }
+
   console.log('[EleveUpsert] upsert OK', { hasData: !!data });
   return data;
 }
 
-export async function upsertEleveFromPayload(eleve: any, edAccountId?: string) {
-  const row = mapEleveToRow(eleve, edAccountId);
-  return upsertEleve(row);
+export async function upsertEleveFromPayload(
+  eleve: any,
+  edAccountId?: string,
+  etablissementOverride?: string | null,
+) {
+  const row = mapEleveToRow(eleve, edAccountId, etablissementOverride ?? undefined);
+  return upsertEleve(row, edAccountId);
 }

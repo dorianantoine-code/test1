@@ -14,13 +14,14 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const eleve = body?.eleve;
     const edAccountId = body?.ed_account_id ? String(body.ed_account_id) : undefined;
+    const etablissement = body?.etablissement ? String(body.etablissement) : undefined;
 
     if (!eleve || typeof eleve !== 'object') {
       const resp = { ok: false, status: 400, error: 'payload { eleve } requis' };
       return NextResponse.json(resp, { status: 400 });
     }
 
-    const data = await upsertEleveFromPayload(eleve, edAccountId);
+    const data = await upsertEleveFromPayload(eleve, edAccountId, etablissement);
     return NextResponse.json({ ok: true, status: 200, data }, { status: 200 });
   } catch (e: any) {
     const msg = e?.message || 'Erreur serveur';

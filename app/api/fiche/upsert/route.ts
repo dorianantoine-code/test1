@@ -19,34 +19,43 @@ function todayInParis(): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { eleveId, jour } = await req.json();
+    const { eleveId, jour, etablissement } = await req.json();
     if (!eleveId || !Number.isFinite(Number(eleveId))) {
       return NextResponse.json({ error: 'eleveId manquant ou invalide' }, { status: 400 });
     }
 
     const supabase = getSupabaseAdmin();
 
-    // 1) Retrouver le compte associé à l'élève (cohérence référentielle)
-    const { data: eleve, error: eleveErr } = await supabase
+    // 1) Retrouver l'établissement de l'élève (cohérence référentielle)
+    let etab: string | null = (etablissement ?? '').toString().trim() || null;
+    if (!etab) {
+      const { data: eleve, error: eleveErr } = await supabase
       .from('eleve')
-      .select('ed_account_id')
+      .select('etablissement')
       .eq('ed_eleve_id', Number(eleveId))
       .single();
-
-    if (eleveErr || !eleve) {
+      if (eleveErr || !eleve) {
+        return NextResponse.json(
+          { error: `Élève introuvable pour ed_eleve_id=${eleveId}` },
+          { status: 404 },
+        );
+      }
+      etab = eleve.etablissement || null;
+    }
+    if (!etab) {
       return NextResponse.json(
-        { error: `Élève introuvable pour ed_eleve_id=${eleveId}` },
-        { status: 404 },
+        { error: "Etablissement introuvable pour l'élève" },
+        { status: 400 },
       );
     }
 
     const jourStr: string =
       typeof jour === 'string' && jour.length >= 10 ? jour.slice(0, 10) : todayInParis();
 
-    // 2) Upsert (1 fiche par élève et par jour)
+    // 2) Upsert (1 fiche par élève + etablissement et par jour)
     const payload = {
       ed_eleve_id: Number(eleveId),
-      ed_account_id: eleve.ed_account_id,
+      etablissement: etab,
       jour: jourStr, // Postgres cast -> date
       updated_at: new Date().toISOString(), // utile même si trigger existe
     };
@@ -54,7 +63,7 @@ export async function POST(req: NextRequest) {
     const { data: upserted, error: upsertErr } = await supabase
       .from('fiche_devoir')
       .upsert(payload, {
-        onConflict: 'ed_eleve_id,jour',
+        onConflict: 'ed_eleve_id,etablissement,jour',
         ignoreDuplicates: false,
         defaultToNull: false,
       })

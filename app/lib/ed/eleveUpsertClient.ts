@@ -9,6 +9,7 @@
 export async function upsertSelectedEleve(eleve: any, ed_account_id?: string) {
   try {
     let accountId = ed_account_id;
+    let etablissement: string | undefined;
 
     // Tentative d'extraction depuis le login_data en sessionStorage
     if (!accountId) {
@@ -27,8 +28,22 @@ export async function upsertSelectedEleve(eleve: any, ed_account_id?: string) {
             acc?.compteId ??
             null;
           if (id) accountId = String(id);
+          etablissement =
+            acc?.etablissement?.nom ??
+            acc?.etablissement ??
+            acc?.profile?.nomEtablissement ??
+            undefined;
         }
       } catch {}
+    }
+
+    // fallback: etab directement sur l'élève
+    if (!etablissement) {
+      etablissement =
+        eleve?.etablissement?.nom ??
+        eleve?.etablissement ??
+        eleve?.nomEtablissement ??
+        undefined;
     }
 
     const res = await fetch('/api/ed/eleve/upsert', {
@@ -37,6 +52,7 @@ export async function upsertSelectedEleve(eleve: any, ed_account_id?: string) {
       body: JSON.stringify({
         eleve,
         ed_account_id: accountId,
+        etablissement,
       }),
     });
 

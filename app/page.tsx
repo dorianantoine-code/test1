@@ -100,6 +100,7 @@ export default function LoginPage() {
         sessionStorage.removeItem('ed_selected_eleve_id');
         sessionStorage.removeItem('ed_selected_eleve_name');
         sessionStorage.removeItem('ed_selected_eleve_photo');
+        sessionStorage.removeItem('ed_selected_eleve_etablissement');
 
         router.push('/ed/eleves');
         return;

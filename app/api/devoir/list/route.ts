@@ -14,6 +14,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 type Body = {
   eleveId: number | string;
+  etablissement?: string | null;
   onlyFuture?: boolean;
 };
 
@@ -30,10 +31,28 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as Body;
     const eleveId =
       typeof body?.eleveId === 'string' ? parseInt(body.eleveId, 10) : Number(body?.eleveId);
+    const etablissement = (body?.etablissement ?? '').toString().trim() || null;
     const onlyFuture = body?.onlyFuture !== false; // par défaut true
 
     if (!eleveId || Number.isNaN(eleveId)) {
       return NextResponse.json({ ok: false, error: 'eleveId invalide' }, { status: 400 });
+    }
+
+    let etab = etablissement;
+    if (!etab) {
+      const { data: eData, error: eErr } = await supabase
+        .from('eleve')
+        .select('etablissement')
+        .eq('ed_eleve_id', eleveId)
+        .maybeSingle();
+      if (eErr) return NextResponse.json({ ok: false, error: eErr.message }, { status: 500 });
+      etab = eData?.etablissement || null;
+    }
+    if (!etab) {
+      return NextResponse.json(
+        { ok: false, error: "Etablissement introuvable pour l'élève" },
+        { status: 400 },
+      );
     }
 
     let q = supabase
@@ -41,7 +60,8 @@ export async function POST(req: Request) {
       .select(
         'ed_devoir_id, ed_eleve_id, due_date, matiere, code_matiere, a_faire, effectue, interrogation, documents_a_faire, donne_le, rendre_en_ligne, last_sync_at'
       )
-      .eq('ed_eleve_id', eleveId);
+      .eq('ed_eleve_id', eleveId)
+      .eq('etablissement', etab);
 
     if (onlyFuture) {
       q = q.gte('due_date', todayYMD());
@@ -54,7 +74,8 @@ export async function POST(req: Request) {
     const { data: cmRows, error: cErr } = await supabase
       .from('coef_matiere')
       .select('matiere, score')
-      .eq('ed_eleve_id', eleveId);
+      .eq('ed_eleve_id', eleveId)
+      .eq('etablissement', etab);
 
     if (cErr) return NextResponse.json({ ok: false, error: cErr.message }, { status: 500 });
 

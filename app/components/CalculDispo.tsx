@@ -20,7 +20,7 @@ type EdtResponse = {
 type AgendaPersoItem = {
   id: number;
   ed_eleve_id: number;
-  ed_account_id: number;
+  etablissement?: string | null;
   event_type: 'Sport' | 'Musique' | 'Cours particulier' | 'Autres';
   days: number[]; // 1=lundi..7=dimanche
   note?: string | null;
@@ -38,12 +38,52 @@ type Row = {
 function getTokenAndEleveId() {
   let token: string | null = null;
   let eleveId: number | null = null;
+  let etablissement: string | null = null;
   try {
     token = sessionStorage.getItem('ed_token');
     const sid = sessionStorage.getItem('ed_selected_eleve_id');
+    etablissement = sessionStorage.getItem('ed_selected_eleve_etablissement');
     if (sid) eleveId = Number(sid);
+
+    if (!eleveId) {
+      const rawEleve = sessionStorage.getItem('selected_eleve');
+      if (rawEleve) {
+        const parsedEleve = JSON.parse(rawEleve);
+        eleveId =
+          Number(parsedEleve?.ed_eleve_id ?? parsedEleve?.id ?? parsedEleve?.eleveId) || null;
+        etablissement =
+          etablissement ||
+          parsedEleve?.etablissement?.nom ||
+          parsedEleve?.etablissement ||
+          parsedEleve?.nomEtablissement ||
+          null;
+      }
+    }
+
+    if (!etablissement && eleveId) {
+      const raw = sessionStorage.getItem('ed_login_data');
+      if (raw) {
+        const login = JSON.parse(raw);
+        const root = login?.data ?? login;
+        const accs: any[] = root?.accounts ?? [];
+        for (const a of accs) {
+          const arr = a?.profile?.eleves ?? [];
+          for (const e of arr) {
+            if (Number(e?.id) === eleveId) {
+              etablissement =
+                e?.etablissement?.nom ??
+                e?.etablissement ??
+                e?.nomEtablissement ??
+                a?.etablissement?.nom ??
+                a?.etablissement ??
+                etablissement;
+            }
+          }
+        }
+      }
+    }
   } catch {}
-  return { token, eleveId };
+  return { token, eleveId, etablissement };
 }
 
 function ymd(date: Date) {
@@ -153,7 +193,7 @@ type Props = {
 };
 
 export default function CalculDispo({ onAggregateScore }: Props) {
-  const [{ token, eleveId }, setAuth] = useState(getTokenAndEleveId);
+  const [{ token, eleveId, etablissement }, setAuth] = useState(getTokenAndEleveId);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -204,7 +244,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     return () => {
       aborted = true;
     };
-  }, [token, eleveId, win.start, win.end]);
+  }, [token, eleveId, etablissement, win.start, win.end]);
 
   // agenda_perso
   useEffect(() => {
@@ -217,7 +257,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
         const res = await fetch('/api/agenda_perso/list', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ eleveId }),
+          body: JSON.stringify({ eleveId, etablissement }),
           cache: 'no-store',
         });
         const json = await res.json();
@@ -233,7 +273,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     return () => {
       aborted = true;
     };
-  }, [eleveId]);
+  }, [eleveId, etablissement]);
 
   // jours avec événement perso
   const daysWithPersonalEvent: Set<number> = useMemo(() => {

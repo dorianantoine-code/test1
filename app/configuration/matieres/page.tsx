@@ -22,6 +22,7 @@ function unionMatieres(a: MatiereItem[], b: MatiereItem[]): MatiereItem[] {
 export default function MatieresConfigPage() {
   const [token, setToken] = useState<string | null>(null);
   const [eleveId, setEleveId] = useState<number | null>(null);
+  const [etablissement, setEtablissement] = useState<string | null>(null);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +38,10 @@ export default function MatieresConfigPage() {
     try {
       const t = sessionStorage.getItem('ed_token');
       const sid = sessionStorage.getItem('ed_selected_eleve_id');
+      const etab = sessionStorage.getItem('ed_selected_eleve_etablissement');
       setToken(t);
       setEleveId(sid ? Number(sid) : null);
+      setEtablissement(etab || null);
     } catch {}
   }, []);
 
@@ -54,7 +57,7 @@ export default function MatieresConfigPage() {
         const listReq = fetch('/api/matieres/list', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ eleveId: Number(eleveId) }),
+          body: JSON.stringify({ eleveId: Number(eleveId), etablissement }),
           cache: 'no-store',
         }).then(async (res) => {
           const json = await res.json();
@@ -67,7 +70,7 @@ export default function MatieresConfigPage() {
         const prefsReq = fetch('/api/matieres/prefs/list', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ eleveId: Number(eleveId) }),
+          body: JSON.stringify({ eleveId: Number(eleveId), etablissement }),
           cache: 'no-store',
         }).then(async (res) => {
           const json = await res.json();
@@ -131,6 +134,7 @@ export default function MatieresConfigPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           eleveId: Number(eleveId),
+          etablissement,
           codeMatiere: code,
           matiere: label,
           choix, // 'peu' | 'normal' | 'beaucoup'
@@ -216,7 +220,13 @@ export default function MatieresConfigPage() {
                               disabled={isSaving}
                               className={[
                                 'px-3 py-1.5 rounded-full border text-sm transition',
-                                current === opt ? 'bg-black text-white' : 'hover:bg-black/5',
+                                current === opt
+                                  ? opt === 'peu'
+                                    ? 'bg-amber-100 border-amber-200 text-amber-900'
+                                    : opt === 'beaucoup'
+                                    ? 'bg-blue-100 border-blue-200 text-blue-900'
+                                    : 'bg-green-100 border-green-200 text-green-900'
+                                  : 'hover:bg-black/5',
                                 isSaving ? 'opacity-60 cursor-wait' : 'cursor-pointer',
                               ].join(' ')}
                               title="Cliquer pour enregistrer"

@@ -17,6 +17,8 @@ git commit -m "feat(agenda): semaine en cours par défaut + rendu visuel EDT; fi
 git pull --rebase origin main
 git pull --rebase origin main
 git push origin main
+git add . && git commit -m "loginok" && git push
+
 
 # 4) Se resynchroniser proprement si le remote a avancé
 

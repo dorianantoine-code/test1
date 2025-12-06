@@ -14,7 +14,7 @@ type Body = {
   ed_eleve_id: number;
   ed_devoir_id: number;
   action: 'today' | 'yesterday' | 'previous' | 'not_done';
-  ed_account_id?: number; // optionnel si tu gères la triple clé
+  etablissement?: string | null;
 };
 
 function isoShift(days: number): string {
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { ed_eleve_id, ed_devoir_id, action, ed_account_id } = body as Body;
+  const { ed_eleve_id, ed_devoir_id, action, etablissement } = body as Body;
 
   if (
     typeof ed_eleve_id !== 'number' ||
@@ -68,20 +68,36 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    let q = supabase
+    let etab = etablissement ? String(etablissement) : null;
+    if (!etab) {
+      const { data: eData, error: eErr } = await supabase
+        .from(TABLE_NAME)
+        .select('etablissement')
+        .eq('ed_eleve_id', ed_eleve_id)
+        .eq('ed_devoir_id', ed_devoir_id)
+        .maybeSingle();
+      if (eErr) {
+        return NextResponse.json({ error: eErr.message }, { status: 500 });
+      }
+      etab = eData?.etablissement || null;
+    }
+    if (!etab) {
+      return NextResponse.json(
+        { error: "Etablissement introuvable pour le devoir" },
+        { status: 400 },
+      );
+    }
+
+    const { data, error } = await supabase
       .from(TABLE_NAME)
       .update(update)
       .eq('ed_eleve_id', ed_eleve_id)
       .eq('ed_devoir_id', ed_devoir_id)
+      .eq('etablissement', etab)
       .select(
-        'ed_eleve_id,ed_devoir_id,effectue,date_realisation,due_date,matiere,code_matiere'
+        'ed_eleve_id,etablissement,ed_devoir_id,effectue,date_realisation,due_date,matiere,code_matiere'
       );
 
-    if (typeof ed_account_id === 'number') {
-      q = q.eq('ed_account_id', ed_account_id);
-    }
-
-    const { data, error } = await q;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

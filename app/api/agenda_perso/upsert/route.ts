@@ -15,6 +15,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 type Body = {
   id?: number | string;                  // si présent => update
   eleveId: number | string;
+  etablissement?: string | null;
   eventType: 'Sport' | 'Musique' | 'Cours particulier' | 'Autres';
   days: number[] | string[];             // 1..7
   note?: string | null;
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
     const eleveId = typeof body.eleveId === 'string' ? parseInt(body.eleveId, 10) : Number(body.eleveId);
     if (!eleveId || Number.isNaN(eleveId))
       return NextResponse.json({ ok: false, error: 'eleveId invalide' }, { status: 400 });
+    const etablissement = (body.etablissement ?? '').toString().trim() || null;
 
     const eventType = body.eventType;
     if (!['Sport', 'Musique', 'Cours particulier', 'Autres'].includes(eventType))
@@ -49,17 +51,23 @@ export async function POST(req: Request) {
 
     const note = body.note ?? null;
 
-    // récupérer ed_account_id via la table eleve
-    const { data: eData, error: eErr } = await supabase
-      .from('eleve')
-      .select('ed_account_id')
-      .eq('ed_eleve_id', eleveId)
-      .maybeSingle();
-
-    if (eErr) return NextResponse.json({ ok: false, error: eErr.message }, { status: 500 });
-    const edAccountId = eData?.ed_account_id;
-    if (!edAccountId)
-      return NextResponse.json({ ok: false, error: "Compte associé introuvable" }, { status: 400 });
+    // récupérer etablissement (obligatoire) depuis eleve si non fourni
+    let etab = etablissement;
+    if (!etab) {
+      const { data: eData, error: eErr } = await supabase
+        .from('eleve')
+        .select('etablissement')
+        .eq('ed_eleve_id', eleveId)
+        .maybeSingle();
+      if (eErr) return NextResponse.json({ ok: false, error: eErr.message }, { status: 500 });
+      etab = eData?.etablissement || null;
+    }
+    if (!etab) {
+      return NextResponse.json(
+        { ok: false, error: "Etablissement introuvable pour l'élève" },
+        { status: 400 },
+      );
+    }
 
     if (!id) {
       // INSERT
@@ -67,7 +75,7 @@ export async function POST(req: Request) {
         .from('agenda_perso')
         .insert({
           ed_eleve_id: eleveId,
-          ed_account_id: edAccountId,
+          etablissement: etab,
           event_type: eventType,
           days,
           note,
@@ -81,12 +89,15 @@ export async function POST(req: Request) {
       // UPDATE (sécuriser que la ligne appartient à cet élève)
       const { data: row, error: rErr } = await supabase
         .from('agenda_perso')
-        .select('id, ed_eleve_id')
+        .select('id, ed_eleve_id, etablissement')
         .eq('id', id)
         .maybeSingle();
       if (rErr) return NextResponse.json({ ok: false, error: rErr.message }, { status: 500 });
-      if (!row || row.ed_eleve_id !== eleveId)
-        return NextResponse.json({ ok: false, error: "Élément introuvable pour cet élève" }, { status: 404 });
+      if (!row || row.ed_eleve_id !== eleveId || row.etablissement !== etab)
+        return NextResponse.json(
+          { ok: false, error: "Élément introuvable pour cet élève/établissement" },
+          { status: 404 },
+        );
 
       const { data, error } = await supabase
         .from('agenda_perso')
@@ -96,6 +107,7 @@ export async function POST(req: Request) {
           note,
         })
         .eq('id', id)
+        .eq('etablissement', etab)
         .select()
         .maybeSingle();
 

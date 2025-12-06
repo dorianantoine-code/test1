@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     const id = typeof rawId === 'string' ? parseInt(rawId, 10) : Number(rawId);
     const rawEleveId = body?.eleveId;
     const eleveId = typeof rawEleveId === 'string' ? parseInt(rawEleveId, 10) : Number(rawEleveId);
+    const etablissement = (body?.etablissement ?? '').toString().trim() || null;
 
     if (!id || Number.isNaN(id)) return NextResponse.json({ ok: false, error: 'id invalide' }, { status: 400 });
     if (!eleveId || Number.isNaN(eleveId))
@@ -27,14 +28,22 @@ export async function POST(req: Request) {
     // sécurité : vérifier appartenance à l'élève
     const { data: row, error: rErr } = await supabase
       .from('agenda_perso')
-      .select('id, ed_eleve_id')
+      .select('id, ed_eleve_id, etablissement')
       .eq('id', id)
       .maybeSingle();
     if (rErr) return NextResponse.json({ ok: false, error: rErr.message }, { status: 500 });
-    if (!row || row.ed_eleve_id !== eleveId)
-      return NextResponse.json({ ok: false, error: "Élément introuvable pour cet élève" }, { status: 404 });
+    if (!row || row.ed_eleve_id !== eleveId || (etablissement && row.etablissement !== etablissement))
+      return NextResponse.json(
+        { ok: false, error: "Élément introuvable pour cet élève/établissement" },
+        { status: 404 },
+      );
 
-    const { error } = await supabase.from('agenda_perso').delete().eq('id', id);
+    const { error } = await supabase
+      .from('agenda_perso')
+      .delete()
+      .eq('id', id)
+      .eq('ed_eleve_id', eleveId)
+      .eq('etablissement', etablissement || row.etablissement);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
     return NextResponse.json({ ok: true });

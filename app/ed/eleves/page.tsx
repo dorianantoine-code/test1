@@ -12,6 +12,7 @@ type Eleve = {
   prenom?: string;
   nom?: string;
   photo?: string; // souvent //doc1.ecoledirecte.com/PhotoEleves/...
+  etablissement?: string | null;
 };
 
 export default function ElevesPage() {
@@ -37,7 +38,14 @@ export default function ElevesPage() {
       const arr = a?.profile?.eleves ?? [];
       for (const e of arr) {
         if (e && typeof e.id === 'number') {
-          list.push({ id: e.id, prenom: e.prenom, nom: e.nom, photo: e.photo });
+          const etab =
+            e?.etablissement?.nom ??
+            e?.etablissement ??
+            e?.nomEtablissement ??
+            a?.etablissement?.nom ??
+            a?.etablissement ??
+            null;
+          list.push({ id: e.id, prenom: e.prenom, nom: e.nom, photo: e.photo, etablissement: etab });
         }
       }
     }
@@ -72,6 +80,7 @@ export default function ElevesPage() {
         eleve?.prenom ? `${eleve.prenom} ${eleve.nom ?? ''}`.trim() : eleve?.nom ?? '',
       );
       if (eleve?.photo) sessionStorage.setItem('ed_selected_eleve_photo', eleve.photo);
+      if (eleve?.etablissement) sessionStorage.setItem('ed_selected_eleve_etablissement', eleve.etablissement);
 
       // 2) upsert Supabase (non bloquant pour l'UX si tu veux)
       await upsertSelectedEleve(eleve); // passe ed_account_id en 2e param si tu l'as

@@ -28,6 +28,7 @@ type EdCdtResponse = {
 type DbDevoir = {
   ed_devoir_id: number;
   ed_eleve_id: number;
+  etablissement?: string | null;
   due_date: string | null;
   matiere: string | null;
   code_matiere: string | null;
@@ -47,10 +48,12 @@ type DbDevoir = {
 function getTokenAndEleveId() {
   let token: string | null = null;
   let eleveId: number | null = null;
+  let etablissement: string | null = null;
 
   try {
     token = sessionStorage.getItem('ed_token');
     const eleveIdStr = sessionStorage.getItem('ed_selected_eleve_id');
+    etablissement = sessionStorage.getItem('ed_selected_eleve_etablissement');
     if (eleveIdStr) eleveId = Number(eleveIdStr);
 
     if (!token) {
@@ -67,13 +70,45 @@ function getTokenAndEleveId() {
         const parsedEleve = JSON.parse(rawEleve);
         eleveId =
           Number(parsedEleve?.ed_eleve_id ?? parsedEleve?.id ?? parsedEleve?.eleveId) || null;
+        etablissement =
+          etablissement ||
+          parsedEleve?.etablissement?.nom ||
+          parsedEleve?.etablissement ||
+          parsedEleve?.nomEtablissement ||
+          null;
       }
+    }
+
+    // fallback: chercher l'établissement dans login_data pour l'élève sélectionné
+    if ((!etablissement || etablissement === '') && eleveId) {
+      try {
+        const raw = sessionStorage.getItem('ed_login_data');
+        if (raw) {
+          const login = JSON.parse(raw);
+          const root = login?.data ?? login;
+          const accs: any[] = root?.accounts ?? [];
+          for (const a of accs) {
+            const arr = a?.profile?.eleves ?? [];
+            for (const e of arr) {
+              if (Number(e?.id) === eleveId) {
+                etablissement =
+                  e?.etablissement?.nom ??
+                  e?.etablissement ??
+                  e?.nomEtablissement ??
+                  a?.etablissement?.nom ??
+                  a?.etablissement ??
+                  etablissement;
+              }
+            }
+          }
+        }
+      } catch {}
     }
   } catch {
     // ignore
   }
 
-  return { token, eleveId };
+  return { token, eleveId, etablissement };
 }
 
 /* ---- Menu d’action par ligne ---- */
@@ -167,7 +202,7 @@ function RowActionMenu({
 }
 
 export default function DevoirsPanel() {
-  const [{ token, eleveId }, setAuth] = useState(getTokenAndEleveId);
+  const [{ token, eleveId, etablissement }, setAuth] = useState(getTokenAndEleveId);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<EdCdtResponse | null>(null);
@@ -199,7 +234,7 @@ export default function DevoirsPanel() {
         const res = await fetch('/api/ed/cdt', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ token, eleveId }),
+          body: JSON.stringify({ token, eleveId, etablissement }),
         });
 
         if (!res.ok) {
@@ -268,10 +303,16 @@ export default function DevoirsPanel() {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             eleveId,
+            etablissement,
             cdtData: normalized,
           }),
         });
-        const json = await res.json();
+        let json: any = null;
+        try {
+          json = await res.json();
+        } catch {
+          /* ignore parse errors below */
+        }
         if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
         if (!aborted) {
           lastSyncedKeyRef.current = key;
@@ -294,7 +335,7 @@ export default function DevoirsPanel() {
       const res = await fetch('/api/devoir/list', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ eleveId, onlyFuture: true }),
+        body: JSON.stringify({ eleveId, etablissement, onlyFuture: true }),
         cache: 'no-store',
       });
       const json = await res.json();
@@ -359,6 +400,7 @@ export default function DevoirsPanel() {
           ed_eleve_id: eleveId,
           ed_devoir_id,
           action,
+          etablissement,
         }),
       });
       const json = await res.json();

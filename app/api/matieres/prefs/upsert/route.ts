@@ -14,10 +14,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 type Body = {
   eleveId: number | string;
+  etablissement?: string | null;
   codeMatiere: string;
   matiere: string;
   choix: 'peu' | 'normal' | 'beaucoup';
-  edAccountId?: number | string; // facultatif (on peut le déduire)
 };
 
 function scoreFor(choix: Body['choix']): 1 | 2 | 3 {
@@ -48,49 +48,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'choix invalide' }, { status: 400 });
     }
 
-    // Récup/valide ed_account_id
-    let edAccountId: number | null = null;
-    if (body.edAccountId) {
-      edAccountId =
-        typeof body.edAccountId === 'string'
-          ? parseInt(body.edAccountId, 10)
-          : Number(body.edAccountId);
-    } else {
-      // on déduit via la table 'eleve'
+    // Récup etablissement
+    let etab = (body.etablissement ?? '').toString().trim() || null;
+    if (!etab) {
       const { data: eData, error: eErr } = await supabase
         .from('eleve')
-        .select('ed_account_id')
+        .select('etablissement')
         .eq('ed_eleve_id', eleveId)
         .maybeSingle();
       if (eErr) {
         console.error('[prefs/upsert] lookup eleve error:', eErr);
         return NextResponse.json({ ok: false, error: eErr.message }, { status: 500 });
       }
-      edAccountId = eData?.ed_account_id ?? null;
+      etab = eData?.etablissement || null;
     }
-
-    if (!edAccountId) {
+    if (!etab) {
       return NextResponse.json(
-        { ok: false, error: "Impossible d'associer le compte (ed_account_id manquant)" },
+        { ok: false, error: "Etablissement introuvable pour l'élève" },
         { status: 400 },
       );
     }
 
     const score = scoreFor(choix);
 
-    // UPSERT par clé (ed_eleve_id, code_matiere)
+    // UPSERT par clé (ed_eleve_id, etablissement, code_matiere)
     const { data, error } = await supabase
       .from('coef_matiere')
       .upsert(
         {
           ed_eleve_id: eleveId,
-          ed_account_id: edAccountId,
+          etablissement: etab,
           code_matiere: code,
           matiere,
           choix,
           score,
         },
-        { onConflict: 'ed_eleve_id,code_matiere' },
+        { onConflict: 'ed_eleve_id,etablissement,code_matiere' },
       )
       .select()
       .maybeSingle();
