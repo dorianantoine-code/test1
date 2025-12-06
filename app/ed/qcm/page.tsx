@@ -114,17 +114,37 @@ export default function QcmPage() {
       setError(null);
 
       try {
+        console.log('[QCM][client] start call', {
+          hasToken: !!tempToken,
+          tokenPrefix: String(tempToken).slice(0, 8),
+          tokenLen: String(tempToken).length,
+          hasCookie: !!cookieHeader,
+          cookieLen: cookieHeader ? cookieHeader.length : 0,
+          hasGtk: !!gtk,
+          gtkLen: gtk ? gtk.length : 0,
+        });
+
         const res = await fetch('/api/ed/qcm/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             token: tempToken,
             cookieHeader: cookieHeader || undefined,
+            gtk: gtk || undefined,
           }),
         });
 
         const json: StartResp = await res.json();
         if (!json.ok) throw new Error(`QCM start a échoué (status ${json.status})`);
+
+        console.log('[QCM][client] start resp', {
+          status: json.status,
+          keys: Object.keys(json?.data || {}),
+          code: json?.data?.code,
+          token: json?.data?.token,
+          hasData: !!json?.data?.data,
+          nestedKeys: json?.data?.data ? Object.keys(json.data.data) : [],
+        });
 
         setRawStart(json);
 
@@ -158,11 +178,21 @@ export default function QcmPage() {
           token: tempToken,
           choix: choiceBase64, // NE PAS MODIFIER
           cookieHeader: cookieHeader || undefined,
+          gtk: gtk || undefined,
         }),
       });
       const json: AnswerResp = await res.json();
       setRawAnswer(json);
       if (!json.ok) throw new Error(`QCM answer échoué (status ${json.status})`);
+
+      console.log('[QCM][client] answer resp', {
+        status: json.status,
+        keys: Object.keys(json?.data || {}),
+        code: json?.data?.code,
+        token: json?.data?.token,
+        hasData: !!json?.data?.data,
+        nestedKeys: json?.data?.data ? Object.keys(json.data.data) : [],
+      });
 
       console.warn('[QCM] Upsert 1/2 → depuis réponse /answer');
       await upsertFromEdResponse(json); // <-- upsert #1 (si la réponse contient account)

@@ -1,6 +1,14 @@
 // app/api/ed/login/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { ED_BASE, ED_VERSION, normalizeGtk, headersWithGtk, makeDataBody } from '../_shared';
+import {
+  ED_BASE,
+  ED_VERSION,
+  normalizeGtk,
+  headersWithGtk,
+  makeDataBody,
+  cookieJarFromSetCookieRaw,
+  mergeCookieHeaders,
+} from '../_shared';
 
 export const runtime = 'nodejs';
 
@@ -31,6 +39,7 @@ export async function POST(req: NextRequest) {
     identifiant: String(username),
     motdepasse: String(password),
     isRelogin: false,
+    acceptationCharte: true,
     uuid: '',
   };
 
@@ -47,8 +56,27 @@ export async function POST(req: NextRequest) {
 
   const xToken = res.headers.get('x-token') ?? undefined;
   const xCode = res.headers.get('x-code') ?? undefined;
+  const setCookieRaw = res.headers.get('set-cookie');
+  const cookieHeaderFromLogin = cookieJarFromSetCookieRaw(setCookieRaw);
+  const mergedCookieJar = mergeCookieHeaders(cookieHeaderFromLogin, cookieHeader);
   const data = await res.json().catch(() => ({} as any));
-  const token = (data && (data.token || data.data?.token)) ?? xToken;
+  const tokenFromBody = data && (data.token || data.data?.token);
+  const token = tokenFromBody ?? xToken;
+
+  console.log('[ED/Login] response', {
+    httpStatus: res.status,
+    ok: res.ok,
+    codeHeader: xCode,
+    code: data?.code,
+    message: data?.message,
+    tokenPrefix: token ? String(token).slice(0, 8) : null,
+    tokenLen: token ? String(token).length : 0,
+    tokenFromBody: tokenFromBody ? String(tokenFromBody).slice(0, 8) : null,
+    xToken: xToken ? String(xToken).slice(0, 8) : null,
+    hasSetCookie: !!setCookieRaw,
+    setCookieLen: setCookieRaw ? setCookieRaw.length : 0,
+    mergedCookieLen: mergedCookieJar.length,
+  });
 
   return NextResponse.json(
     {
@@ -58,6 +86,16 @@ export async function POST(req: NextRequest) {
       code: data?.code,
       message: data?.message,
       token,
+      xToken,
+      cookieHeader: mergedCookieJar,
+      setCookieRaw,
+      debug: {
+        tokenFromBody: tokenFromBody ? String(tokenFromBody).slice(0, 8) : null,
+        xToken: xToken ? String(xToken).slice(0, 8) : null,
+        mergedCookieLen: mergedCookieJar.length,
+        cookieFromLoginLen: cookieHeaderFromLogin.length,
+        cookieFromRequestLen: cookieHeader ? cookieHeader.length : 0,
+      },
       data,
     },
     { status: res.ok ? 200 : res.status },

@@ -20,8 +20,28 @@ type LoginResponse = {
   code?: number;
   message?: string;
   token?: string;
+  cookieHeader?: string;
   data: any;
 };
+
+function mergeCookieHeadersClient(...headers: Array<string | null | undefined>) {
+  const store = new Map<string, string>();
+  for (const header of headers) {
+    if (!header) continue;
+    const parts = header.split(';').map((p) => p.trim()).filter(Boolean);
+    for (const part of parts) {
+      const eq = part.indexOf('=');
+      if (eq <= 0) continue;
+      const key = part.slice(0, eq).trim();
+      const val = part.slice(eq + 1).trim();
+      if (val === '' && store.has(key)) continue;
+      store.set(key, val);
+    }
+  }
+  return Array.from(store.entries())
+    .map(([k, v]) => `${k}=${v}`)
+    .join('; ');
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -87,16 +107,17 @@ export default function LoginPage() {
 
       // 250 => QCM: sauvegarde du contexte et go /ed/qcm
       if (loginJson.code === 250) {
-        const tempToken = loginJson.token || loginJson.data?.token;
+        const tempToken = loginJson.xToken || loginJson.token || loginJson.data?.token;
         if (!tempToken) {
           throw new Error('Token temporaire absent (code 250).');
         }
 
         // Stocker ce qu'il faut pour finir le flux QCM
+        const jar = loginJson.cookieHeader || gtkJson.cookieHeader || '';
         sessionStorage.setItem('ed_temp_token', tempToken);
         sessionStorage.setItem('ed_username', username);
         sessionStorage.setItem('ed_password', password);
-        sessionStorage.setItem('ed_cookie', gtkJson.cookieHeader || '');
+        sessionStorage.setItem('ed_cookie', jar);
         sessionStorage.setItem('ed_gtk', gtkJson.gtk);
 
         router.push('/ed/qcm');
@@ -118,9 +139,6 @@ export default function LoginPage() {
         <div className="rounded-2xl border p-6 space-y-6">
           <header className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight">Connexion EcoleDirecte</h1>
-            <p className="text-sm text-gray-500">
-              Entrez vos identifiants pour obtenir un <code>token</code>.
-            </p>
           </header>
 
           <form onSubmit={onSubmit} className="space-y-4">
