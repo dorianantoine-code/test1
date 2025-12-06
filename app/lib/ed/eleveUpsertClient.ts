@@ -29,6 +29,10 @@ export async function upsertSelectedEleve(eleve: any, ed_account_id?: string) {
             null;
           if (id) accountId = String(id);
           etablissement =
+            acc?.idEtablissement ??
+            acc?.etablissement?.id ??
+            acc?.etablissement?.idEtablissement ??
+            acc?.profile?.idEtablissement ??
             acc?.etablissement?.nom ??
             acc?.etablissement ??
             acc?.profile?.nomEtablissement ??
@@ -40,6 +44,9 @@ export async function upsertSelectedEleve(eleve: any, ed_account_id?: string) {
     // fallback: etab directement sur l'élève
     if (!etablissement) {
       etablissement =
+        eleve?.idEtablissement ??
+        eleve?.etablissement?.id ??
+        eleve?.etablissement?.idEtablissement ??
         eleve?.etablissement?.nom ??
         eleve?.etablissement ??
         eleve?.nomEtablissement ??

@@ -12,6 +12,19 @@ import CalculDispo from '../components/CalculDispo';
 
 type LoginData = { account?: any; accounts?: any[]; token?: string };
 
+function findEleveById(loginData: any, id: number | null) {
+  if (!id || !loginData) return null;
+  const root = loginData?.data ?? loginData;
+  const accounts: any[] = root?.accounts ?? [];
+  for (const a of accounts) {
+    const arr: any[] = a?.profile?.eleves ?? [];
+    for (const e of arr) {
+      if (Number(e?.id) === Number(id)) return e;
+    }
+  }
+  return null;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -76,6 +89,11 @@ export default function DashboardPage() {
     return 'Dashboard';
   }, [selectedId, selectedName]);
 
+  const selectedElevePayload = useMemo(() => findEleveById(loginData, selectedId), [
+    loginData,
+    selectedId,
+  ]);
+
   return (
     <div className={styles.readable}>
       <main className="min-h-screen p-6 md:p-10">
@@ -129,6 +147,20 @@ export default function DashboardPage() {
               <CalculDispo onAggregateScore={(score) => setWeekScore(score)} />
               {/* Liste les devoirs */}
               <DevoirsPanel />
+
+              {/* Debug: payload élève sélectionné */}
+              <section className="rounded-2xl border p-4 space-y-2">
+                <h3 className="text-lg font-medium text-black">Données élève (JSON)</h3>
+                <div className="text-xs text-gray-700">
+                  {selectedElevePayload ? (
+                    <pre className="overflow-auto rounded-xl bg-gray-900 text-gray-100 p-3">
+                      {JSON.stringify(selectedElevePayload, null, 2)}
+                    </pre>
+                  ) : (
+                    <span>Données élève introuvables dans la session.</span>
+                  )}
+                </div>
+              </section>
             </>
           )}
         </div>

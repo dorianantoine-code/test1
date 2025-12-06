@@ -39,6 +39,11 @@ export default function ElevesPage() {
       for (const e of arr) {
         if (e && typeof e.id === 'number') {
           const etab =
+            e?.idEtablissement ??
+            e?.etablissement?.id ??
+            e?.etablissement?.idEtablissement ??
+            a?.idEtablissement ??
+            a?.etablissement?.id ??
             e?.etablissement?.nom ??
             e?.etablissement ??
             e?.nomEtablissement ??

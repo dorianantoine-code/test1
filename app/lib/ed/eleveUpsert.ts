@@ -45,7 +45,11 @@ export function mapEleveToRow(
   );
 
   const etab = val(
-    eleve?.etablissement?.nom,
+    eleve?.idEtablissement,
+    eleve?.etablissement?.id,
+    eleve?.etablissement?.idEtablissement,
+    eleve?.établissement?.idEtablissement,
+    eleve?.etablissement?.nom, // fallback anciens usages
     eleve?.établissement?.nom,
     eleve?.etablissement,
     eleve?.nomEtablissement,
