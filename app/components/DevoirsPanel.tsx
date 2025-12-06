@@ -401,6 +401,7 @@ export default function DevoirsPanel() {
           ed_devoir_id,
           action,
           etablissement,
+          token,
         }),
       });
       const json = await res.json();

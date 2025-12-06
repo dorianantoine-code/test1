@@ -1,6 +1,7 @@
 /* app/api/devoir/update/route.ts */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { ED_BASE, ED_VERSION, headersWithToken, makeDataBody } from '../../ed/_shared';
 
 const TABLE_NAME = 'devoir'; // adapte si nécessaire
 
@@ -15,12 +16,42 @@ type Body = {
   ed_devoir_id: number;
   action: 'today' | 'yesterday' | 'previous' | 'not_done';
   etablissement?: string | null;
+  token?: string;
 };
 
 function isoShift(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString();
+}
+
+async function updateEdDevoir(opts: {
+  token?: string | null;
+  ed_eleve_id: number;
+  ed_devoir_id: number;
+  done: boolean;
+}) {
+  const { token, ed_eleve_id, ed_devoir_id, done } = opts;
+  if (!token) return;
+
+  const url = `${ED_BASE}/v3/Eleves/${ed_eleve_id}/cahierdetexte.awp?verbe=put&v=${ED_VERSION}`;
+  const payload = {
+    idDevoirsEffectues: done ? [ed_devoir_id] : [],
+    idDevoirsNonEffectues: done ? [] : [ed_devoir_id],
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: headersWithToken(token),
+    body: makeDataBody(payload),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json?.code !== 200) {
+    throw new Error(
+      `ED update failed (status ${res.status}, code ${json?.code ?? 'unknown'}, msg ${json?.message ?? 'n/a'})`,
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -32,6 +63,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { ed_eleve_id, ed_devoir_id, action, etablissement } = body as Body;
+  const token = (body as any)?.token ? String((body as any).token) : null;
 
   if (
     typeof ed_eleve_id !== 'number' ||
@@ -68,6 +100,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // D'abord, tentative de mise à jour côté ED (si token fourni).
+    // Si ED échoue, on renvoie l'erreur et on ne touche pas Supabase.
+    const done = action !== 'not_done';
+    if (token) {
+      await updateEdDevoir({ token, ed_eleve_id, ed_devoir_id, done });
+    }
+
     let etab = etablissement ? String(etablissement) : null;
     if (!etab) {
       const { data: eData, error: eErr } = await supabase
@@ -102,6 +141,8 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    // TODO: si l'API ED propose un endpoint de mise à jour du statut, l'appeler ici avec `token`.
 
     return NextResponse.json({
       ok: true,

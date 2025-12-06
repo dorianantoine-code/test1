@@ -93,6 +93,24 @@ async function tryUpsert(rows: any[], onConflict: string) {
   return data || [];
 }
 
+function mergeEffectueWithBefore(rows: any[], before: any[]) {
+  const map = new Map<number, any>();
+  for (const b of before || []) {
+    map.set(Number(b.ed_devoir_id), b);
+  }
+  return rows.map((r) => {
+    const prev = map.get(Number(r.ed_devoir_id));
+    if (prev && prev.effectue === true && r.effectue === false) {
+      return {
+        ...r,
+        effectue: true,
+        date_realisation: prev.date_realisation ?? r.date_realisation ?? null,
+      };
+    }
+    return r;
+  });
+}
+
 /* === Handler === */
 export async function POST(req: NextRequest) {
   try {
@@ -166,11 +184,12 @@ export async function POST(req: NextRequest) {
       // on log seulement
       console.warn('[sync] read before failed:', e?.message || e);
     }
+    const mergedRows = mergeEffectueWithBefore(rows, before);
 
     // UPSERT
     const mode = 'triple-key';
     try {
-      await tryUpsert(rows, 'ed_eleve_id,etablissement,ed_devoir_id');
+      await tryUpsert(mergedRows, 'ed_eleve_id,etablissement,ed_devoir_id');
     } catch (e: any) {
       const msg = String(e?.message ?? '');
       return NextResponse.json({ error: `Upsert failed: ${msg}` }, { status: 500 });
