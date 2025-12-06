@@ -58,6 +58,9 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // tenter de réutiliser un cookie ED validé pour éviter un nouveau QCM
+      const persistedCookie = sessionStorage.getItem('ed_cookie_persist') || '';
+
       setPhase('gtk');
       const gtkRes = await fetch('/api/ed/gtk', { cache: 'no-store' });
       const gtkJson: GtkResponse = await gtkRes.json();
@@ -74,7 +77,7 @@ export default function LoginPage() {
           username,
           password,
           gtk: gtkJson.gtk,
-          cookieHeader: gtkJson.cookieHeader,
+          cookieHeader: mergeCookieHeadersClient(persistedCookie, gtkJson.cookieHeader),
         }),
       });
       console.warn('[UpsertClient] avant lancement');
@@ -95,6 +98,11 @@ export default function LoginPage() {
 
         sessionStorage.setItem('ed_token', token);
         sessionStorage.setItem('ed_login_data', JSON.stringify(loginJson.data ?? {}));
+        if (loginJson.cookieHeader) {
+          sessionStorage.setItem('ed_cookie_persist', loginJson.cookieHeader);
+        } else if (gtkJson.cookieHeader) {
+          sessionStorage.setItem('ed_cookie_persist', gtkJson.cookieHeader);
+        }
 
         // On force une nouvelle sélection d'élève à chaque login
         sessionStorage.removeItem('ed_selected_eleve_id');

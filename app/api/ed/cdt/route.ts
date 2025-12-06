@@ -4,6 +4,18 @@ import { edCall, ED_BASE, ED_VERSION } from '../_shared';
 
 export const runtime = 'nodejs';
 
+type CDTDayDetail = {
+  matieres?: Array<{
+    id?: number;
+    codeMatiere?: string;
+    aFaire?: {
+      idDevoir?: number;
+      effectue?: boolean;
+    };
+    contenuDeSeance?: { idDevoir?: number };
+  }>;
+};
+
 /**
  * Body JSON attendu:
  * {
@@ -45,6 +57,61 @@ export async function POST(req: NextRequest) {
       code: json?.code,
       hasData: !!json?.data,
     });
+
+    // Enrichissement : pour chaque date, on va chercher le détail jour
+    // pour obtenir un champ "effectue" fiable (observé comme correct côté détail jour).
+    let overrides = 0;
+    const root =
+      json?.data?.cahierDeTexte ??
+      json?.data ??
+      json?.cahierDeTexte ??
+      null;
+
+    if (root && typeof root === 'object') {
+      const dates = Object.keys(root).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+      for (const dateStr of dates) {
+        try {
+          const detailPath = `/v3/Eleves/${eleveId}/cahierdetexte/${dateStr}.awp`;
+          const { json: detailJson } = await edCall(detailPath, {
+            token,
+            verbe: 'get',
+            data: {},
+            cookieHeader,
+          });
+
+          const detail = detailJson?.data as CDTDayDetail | undefined;
+          const matieres = detail?.matieres || [];
+          const effectueById = new Map<number, boolean>();
+          for (const m of matieres) {
+            const id = Number(m?.aFaire?.idDevoir ?? m?.id ?? m?.contenuDeSeance?.idDevoir);
+            if (!id) continue;
+            const eff = m?.aFaire?.effectue;
+            if (typeof eff === 'boolean') {
+              effectueById.set(id, eff);
+            }
+          }
+
+          if (effectueById.size > 0 && Array.isArray(root[dateStr])) {
+            for (const item of root[dateStr]) {
+              const id = Number(item?.idDevoir ?? item?.id);
+              if (!id) continue;
+              if (effectueById.has(id)) {
+                const eff = effectueById.get(id)!;
+                if (item.effectue !== eff) {
+                  overrides += 1;
+                  item.effectue = eff;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[ED/CDT][DETAIL] fail', dateStr, err?.message || err);
+        }
+      }
+      if (overrides > 0) {
+        console.log('[ED/CDT] effectue overrides from daily details:', overrides);
+      }
+    }
 
     return NextResponse.json(
       { ok: res.ok, status: res.status, data: json },

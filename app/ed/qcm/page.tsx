@@ -270,6 +270,9 @@ export default function QcmPage() {
 
       sessionStorage.setItem('ed_token', finalToken);
       sessionStorage.setItem('ed_login_data', JSON.stringify(relogJson.data ?? {}));
+      if (relogJson.cookieHeader || cookieHeader) {
+        sessionStorage.setItem('ed_cookie_persist', relogJson.cookieHeader || cookieHeader || '');
+      }
       cleanupTemp();
       router.push('/ed/eleves');
     } catch (e: any) {
@@ -284,7 +287,7 @@ export default function QcmPage() {
       sessionStorage.removeItem('ed_temp_token');
       sessionStorage.removeItem('ed_username');
       sessionStorage.removeItem('ed_password');
-      sessionStorage.removeItem('ed_cookie');
+      sessionStorage.removeItem('ed_cookie'); // on garde ed_cookie_persist pour réutiliser la session
       sessionStorage.removeItem('ed_gtk');
     } catch {}
   }
