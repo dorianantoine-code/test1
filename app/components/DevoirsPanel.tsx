@@ -234,6 +234,7 @@ export default function DevoirsPanel() {
         const res = await fetch('/api/ed/cdt', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
+          cache: 'no-store',
           body: JSON.stringify({ token, eleveId, etablissement }),
         });
 
@@ -298,14 +299,15 @@ export default function DevoirsPanel() {
     (async () => {
       try {
         setSyncError(null);
-        const res = await fetch('/api/devoir/sync', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            eleveId,
-            etablissement,
-            cdtData: normalized,
-          }),
+      const res = await fetch('/api/devoir/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          eleveId,
+          etablissement,
+          cdtData: normalized,
+        }),
         });
         let json: any = null;
         try {
@@ -316,6 +318,7 @@ export default function DevoirsPanel() {
         if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
         if (!aborted) {
           lastSyncedKeyRef.current = key;
+          await reloadFromDb(); // rafraîchit Supabase avec l'état ED
         }
       } catch (e: any) {
         if (!aborted) setSyncError(e?.message || 'Erreur sync devoirs');
@@ -396,6 +399,7 @@ export default function DevoirsPanel() {
       const res = await fetch('/api/devoir/update', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify({
           ed_eleve_id: eleveId,
           ed_devoir_id,

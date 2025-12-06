@@ -48,13 +48,16 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       { ok: res.ok, status: res.status, data: json },
-      { status: res.ok ? 200 : res.status },
+      {
+        status: res.ok ? 200 : res.status,
+        headers: { 'Cache-Control': 'no-store' },
+      },
     );
   } catch (e: any) {
     console.error('[ED/CDT] ERROR', e?.message || e);
     return NextResponse.json(
       { ok: false, status: 500, message: e?.message || 'Erreur interne (CDT)' },
-      { status: 500 },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

@@ -35,7 +35,10 @@ export async function POST(req: Request) {
     const onlyFuture = body?.onlyFuture !== false; // par défaut true
 
     if (!eleveId || Number.isNaN(eleveId)) {
-      return NextResponse.json({ ok: false, error: 'eleveId invalide' }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: 'eleveId invalide' },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } },
+      );
     }
 
     let etab = etablissement;
@@ -45,13 +48,17 @@ export async function POST(req: Request) {
         .select('etablissement')
         .eq('ed_eleve_id', eleveId)
         .maybeSingle();
-      if (eErr) return NextResponse.json({ ok: false, error: eErr.message }, { status: 500 });
+      if (eErr)
+        return NextResponse.json(
+          { ok: false, error: eErr.message },
+          { status: 500, headers: { 'Cache-Control': 'no-store' } },
+        );
       etab = eData?.etablissement || null;
     }
     if (!etab) {
       return NextResponse.json(
         { ok: false, error: "Etablissement introuvable pour l'élève" },
-        { status: 400 },
+        { status: 400, headers: { 'Cache-Control': 'no-store' } },
       );
     }
 
@@ -68,7 +75,11 @@ export async function POST(req: Request) {
     }
 
     const { data: devoirs, error: dErr } = await q.order('due_date', { ascending: true });
-    if (dErr) return NextResponse.json({ ok: false, error: dErr.message }, { status: 500 });
+    if (dErr)
+      return NextResponse.json(
+        { ok: false, error: dErr.message },
+        { status: 500, headers: { 'Cache-Control': 'no-store' } },
+      );
 
     // Récupérer les coef matière (score 1..3) pour cet élève
     const { data: cmRows, error: cErr } = await supabase
@@ -77,7 +88,11 @@ export async function POST(req: Request) {
       .eq('ed_eleve_id', eleveId)
       .eq('etablissement', etab);
 
-    if (cErr) return NextResponse.json({ ok: false, error: cErr.message }, { status: 500 });
+    if (cErr)
+      return NextResponse.json(
+        { ok: false, error: cErr.message },
+        { status: 500, headers: { 'Cache-Control': 'no-store' } },
+      );
 
     const matiereScore = new Map<string, number>();
     for (const r of cmRows || []) {
@@ -99,9 +114,15 @@ export async function POST(req: Request) {
       };
     });
 
-    return NextResponse.json({ ok: true, items: enriched });
+    return NextResponse.json(
+      { ok: true, items: enriched },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (e: any) {
     console.error('[devoir/list] exception:', e);
-    return NextResponse.json({ ok: false, error: e?.message || 'Erreur serveur' }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message || 'Erreur serveur' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
+    );
   }
 }

@@ -34,6 +34,12 @@ export default function DashboardPage() {
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [weekScore, setWeekScore] = useState<number | null>(null);
+  const [devoirJson, setDevoirJson] = useState<any | null>(null);
+  const [devoirJsonError, setDevoirJsonError] = useState<string | null>(null);
+  const [devoirJsonLoading, setDevoirJsonLoading] = useState(false);
+  const [edRawJson, setEdRawJson] = useState<any | null>(null);
+  const [edRawError, setEdRawError] = useState<string | null>(null);
+  const [edRawLoading, setEdRawLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -93,6 +99,87 @@ export default function DashboardPage() {
     loginData,
     selectedId,
   ]);
+
+  const selectedEtab = useMemo(() => {
+    const eleve = selectedElevePayload as any;
+    return (
+      eleve?.idEtablissement ||
+      eleve?.etablissement?.id ||
+      eleve?.etablissement ||
+      sessionStorage.getItem('ed_selected_eleve_etablissement') ||
+      null
+    );
+  }, [selectedElevePayload]);
+
+  // Debug JSON des devoirs (source Supabase après merge ED)
+  useEffect(() => {
+    let aborted = false;
+    async function loadDevoirsJson() {
+      if (!selectedId) return;
+      setDevoirJsonLoading(true);
+      setDevoirJsonError(null);
+      try {
+        const res = await fetch('/api/devoir/list', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({
+            eleveId: selectedId,
+            etablissement: selectedEtab ?? undefined,
+            onlyFuture: false,
+          }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.ok) {
+          throw new Error(json?.error || `HTTP ${res.status}`);
+        }
+        if (!aborted) setDevoirJson(json);
+      } catch (e: any) {
+        if (!aborted) setDevoirJsonError(e?.message || 'Erreur chargement devoirs (debug)');
+      } finally {
+        if (!aborted) setDevoirJsonLoading(false);
+      }
+    }
+    loadDevoirsJson();
+    return () => {
+      aborted = true;
+    };
+  }, [selectedId, selectedEtab]);
+
+  // Debug JSON brut ED (avant merge Supabase)
+  useEffect(() => {
+    let aborted = false;
+    async function loadEdRaw() {
+      if (!selectedId || !token) return;
+      setEdRawLoading(true);
+      setEdRawError(null);
+      try {
+        const res = await fetch('/api/ed/cdt', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({
+            token,
+            eleveId: selectedId,
+            etablissement: selectedEtab ?? undefined,
+          }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || json?.ok === false) {
+          throw new Error(json?.message || `HTTP ${res.status}`);
+        }
+        if (!aborted) setEdRawJson(json);
+      } catch (e: any) {
+        if (!aborted) setEdRawError(e?.message || 'Erreur chargement ED brut');
+      } finally {
+        if (!aborted) setEdRawLoading(false);
+      }
+    }
+    loadEdRaw();
+    return () => {
+      aborted = true;
+    };
+  }, [selectedId, token, selectedEtab]);
 
   return (
     <div className={styles.readable}>
@@ -160,6 +247,40 @@ export default function DashboardPage() {
                     <span>Données élève introuvables dans la session.</span>
                   )}
                 </div>
+              </section>
+
+              {/* Debug: données ED brutes (CDT) */}
+              <section className="rounded-2xl border p-4 space-y-2">
+                <h3 className="text-lg font-medium text-black">Données ED (brut /api/ed/cdt)</h3>
+                {edRawLoading && <div className="text-sm text-gray-700">Chargement…</div>}
+                {edRawError && <div className="text-sm text-red-600">Erreur : {edRawError}</div>}
+                {edRawJson && (
+                  <pre className="overflow-auto rounded-xl bg-gray-900 text-gray-100 p-3 text-xs">
+                    {JSON.stringify(edRawJson, null, 2)}
+                  </pre>
+                )}
+                {!edRawJson && !edRawLoading && !edRawError && (
+                  <div className="text-sm text-gray-700">Aucune donnée ED disponible.</div>
+                )}
+              </section>
+
+              {/* Debug: devoirs JSON (état DB après merge ED) */}
+              <section className="rounded-2xl border p-4 space-y-2">
+                <h3 className="text-lg font-medium text-black">Données devoirs (JSON)</h3>
+                {devoirJsonLoading && (
+                  <div className="text-sm text-gray-700">Chargement des devoirs…</div>
+                )}
+                {devoirJsonError && (
+                  <div className="text-sm text-red-600">Erreur : {devoirJsonError}</div>
+                )}
+                {devoirJson && (
+                  <pre className="overflow-auto rounded-xl bg-gray-900 text-gray-100 p-3 text-xs">
+                    {JSON.stringify(devoirJson, null, 2)}
+                  </pre>
+                )}
+                {!devoirJson && !devoirJsonLoading && !devoirJsonError && (
+                  <div className="text-sm text-gray-700">Aucune donnée devoir disponible.</div>
+                )}
               </section>
             </>
           )}

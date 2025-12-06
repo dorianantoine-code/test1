@@ -94,18 +94,23 @@ async function tryUpsert(rows: any[], onConflict: string) {
 }
 
 function mergeEffectueWithBefore(rows: any[], before: any[]) {
-  const map = new Map<number, any>();
-  for (const b of before || []) {
-    map.set(Number(b.ed_devoir_id), b);
+  // Priorité ED, mais on ajuste la date_realisation pour rester cohérent
+  const byId = new Map<number, any>();
+  for (const r of before || []) {
+    byId.set(Number(r.ed_devoir_id), r);
   }
+
   return rows.map((r) => {
-    const prev = map.get(Number(r.ed_devoir_id));
-    if (prev && prev.effectue === true && r.effectue === false) {
-      return {
-        ...r,
-        effectue: true,
-        date_realisation: prev.date_realisation ?? r.date_realisation ?? null,
-      };
+    const prev = byId.get(Number(r.ed_devoir_id));
+    const edSaysDone = r.effectue === true;
+
+    // Si ED dit "fait", on garde une date_realisation existante ou on la pose à maintenant
+    if (edSaysDone) {
+      r.date_realisation = r.date_realisation ?? prev?.date_realisation ?? nowISO();
+    } else {
+      // ED dit "non fait" → on force la remise à zéro
+      r.effectue = false;
+      r.date_realisation = null;
     }
     return r;
   });
