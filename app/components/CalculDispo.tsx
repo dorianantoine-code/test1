@@ -404,21 +404,21 @@ export default function CalculDispo({ onAggregateScore }: Props) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="rounded-xl border p-4 bg-gray-50">
-          <div className="text-sm opacity-70">Score total (aujourd’hui → jeudi prochain)</div>
-          <div className="text-2xl font-semibold">
+          <div className="text-sm text-gray-800">Score total (aujourd’hui → jeudi prochain)</div>
+          <div className="text-2xl font-semibold text-black">
             {aggregateScore.toFixed(2)}{' '}
-            <span className="text-base font-normal opacity-70">
+            <span className="text-base font-normal text-gray-700">
               ({aggFrom} → {aggTo})
             </span>
           </div>
         </div>
 
         <div className="rounded-xl border p-4 bg-gray-50">
-          <div className="text-sm opacity-70">{dayLabel}</div>
-          <div className="text-2xl font-semibold">
+          <div className="text-sm text-gray-800">{dayLabel}</div>
+          <div className="text-2xl font-semibold text-black">
             {dayScore.toFixed(2)}{' '}
             {dayLabel === 'Score week-end' && weekendFrom && weekendTo && (
-              <span className="text-base font-normal opacity-70">
+              <span className="text-base font-normal text-gray-700">
                 ({weekendFrom} + {weekendTo})
               </span>
             )}

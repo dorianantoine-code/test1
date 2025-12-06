@@ -120,8 +120,8 @@ export default function DashboardPage() {
               </section>
               {weekScore !== null && (
                 <div className="rounded-xl border p-4 bg-gray-50">
-                  <div className="text-sm opacity-70">Score dispo (jusqu’au jeudi)</div>
-                  <div className="text-xl font-semibold">{weekScore}</div>
+                  <div className="text-sm text-gray-800">Score dispo (jusqu’au jeudi)</div>
+                  <div className="text-xl font-semibold text-black">{weekScore}</div>
                 </div>
               )}
    

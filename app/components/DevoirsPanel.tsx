@@ -152,11 +152,11 @@ function RowActionMenu({
         <div
           role="menu"
           aria-label="Actions devoir"
-          className="absolute right-0 mt-2 w-56 rounded-xl border bg-white shadow-lg overflow-hidden z-10"
+          className="absolute right-0 mt-2 w-56 rounded-xl border bg-white shadow-lg overflow-hidden z-10 text-gray-800"
         >
           <button
             role="menuitem"
-            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-800"
             onClick={() => {
               setOpen(false);
               onMarkToday();
@@ -166,7 +166,7 @@ function RowActionMenu({
           </button>
           <button
             role="menuitem"
-            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-800"
             onClick={() => {
               setOpen(false);
               onMarkYesterday();
@@ -176,7 +176,7 @@ function RowActionMenu({
           </button>
           <button
             role="menuitem"
-            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-800"
             onClick={() => {
               setOpen(false);
               onMarkPrevious();
