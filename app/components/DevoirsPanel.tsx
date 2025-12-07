@@ -440,7 +440,12 @@ export default function DevoirsPanel() {
   function isFicheGreen(dv: DbDevoir) {
     const tomorrow = parisShiftYMD(1);
     const yesterday = parisShiftYMD(-1);
-    const isSunday = new Date().toLocaleDateString('en-US', { timeZone: 'Europe/Paris', weekday: 'short' }) === 'Sun';
+    const isSunday =
+      new Date().toLocaleDateString('en-US', {
+        timeZone: 'Europe/Paris',
+        weekday: 'short',
+      }) === 'Sun';
+    const today = parisShiftYMD(0);
     const dueYmd = toParisYMD(dv.due_date ?? undefined);
     const realYmd = toParisYMD(dv.date_realisation ?? undefined);
 
@@ -448,8 +453,10 @@ export default function DevoirsPanel() {
     const aFaireOui = dv.a_faire !== false; // null/undefined => considérer "oui"
     if (!dv.effectue && aFaireOui && dueYmd && tomorrow && dueYmd === tomorrow) return true;
 
-    // Règle 2 : dimanche, déjà effectué hier (samedi)
-    if (isSunday && dv.effectue && realYmd && yesterday && realYmd === yesterday) return true;
+    // Règle 2 : dimanche, déjà effectué hier (samedi) ou aujourd'hui
+    if (isSunday && dv.effectue && realYmd) {
+      if ((yesterday && realYmd === yesterday) || (today && realYmd === today)) return true;
+    }
 
     return false;
   }
