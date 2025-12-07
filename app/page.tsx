@@ -47,6 +47,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'gtk' | 'login'>('idle');
@@ -166,15 +167,25 @@ export default function LoginPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Mot de passe</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border px-3 py-2 outline-none focus:ring-2"
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <input
+                  type={passwordVisible ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-xl border px-3 py-2 pr-10 outline-none focus:ring-2"
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  aria-label={passwordVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
+                  onClick={() => setPasswordVisible((v) => !v)}
+                >
+                  {passwordVisible ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
 
             <button

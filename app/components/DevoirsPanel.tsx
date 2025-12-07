@@ -454,6 +454,43 @@ export default function DevoirsPanel() {
     return false;
   }
 
+  // Calcul des bulles vertes + score restant (zone FICHE DEVOIR)
+  function computeFicheFlags() {
+    const greenIds = new Set<number>();
+    if (!dbDevoirs || dbDevoirs.length === 0) {
+      return { greenIds, remaining: ficheScore ?? 0 };
+    }
+
+    const normDate = (s?: string | null) => toParisYMD(s ?? undefined) ?? '9999-12-31';
+    const sorted = [...dbDevoirs].sort((a, b) => normDate(a.due_date).localeCompare(normDate(b.due_date)));
+
+    // 1) verts de base
+    let sumBase = 0;
+    for (const dv of sorted) {
+      if (isFicheGreen(dv)) {
+        greenIds.add(dv.ed_devoir_id);
+        sumBase += Number(dv.score ?? 1);
+      }
+    }
+
+    let remaining = Math.max((ficheScore ?? 0) - sumBase, 0);
+
+    // 2) compléter avec les premières croix rouges tant qu'il reste du score
+    if (remaining > 0) {
+      for (const dv of sorted) {
+        if (greenIds.has(dv.ed_devoir_id)) continue;
+        const lineScore = Number(dv.score ?? 1);
+        greenIds.add(dv.ed_devoir_id);
+        remaining = Math.max(remaining - lineScore, 0);
+        if (remaining <= 0) break;
+      }
+    }
+
+    return { greenIds, remaining };
+  }
+
+  const ficheFlags = useMemo(() => computeFicheFlags(), [dbDevoirs, ficheScore]);
+
   async function updateDevoirAction(
     ed_devoir_id: number,
     action: 'today' | 'yesterday' | 'previous' | 'not_done',
@@ -615,80 +652,77 @@ export default function DevoirsPanel() {
               <div className="rounded-lg border p-3 text-sm">Aucun devoir à venir.</div>
             )}
 
-            {!dbError && !dbLoading && dbDevoirs && dbDevoirs.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="py-2 pr-3">Date</th>
-                      <th className="py-2 pr-3">Matière</th>
-                      <th className="py-2 pr-3">À faire</th>
-                      <th className="py-2 pr-3">Contrôle</th>
-                      <th className="py-2 pr-3">Score matière</th>
-                      <th className="py-2 pr-3">Score contrôle</th>
-                      <th className="py-2 pr-3">Score</th>
-                      <th className="py-2 pr-0 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dbDevoirs.map((dv) => {
-                      const aFaireUI = !Boolean(dv.effectue);
+          {!dbError && !dbLoading && dbDevoirs && dbDevoirs.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="py-2 pr-3">Date</th>
+                    <th className="py-2 pr-3">Matière</th>
+                    <th className="py-2 pr-3">À faire</th>
+                    <th className="py-2 pr-3">Contrôle</th>
+                    <th className="py-2 pr-3">Score matière</th>
+                    <th className="py-2 pr-3">Score contrôle</th>
+                    <th className="py-2 pr-3">Score</th>
+                    <th className="py-2 pr-0 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dbDevoirs.map((dv) => {
+                    const aFaireUI = !Boolean(dv.effectue);
 
-                      return (
-                        <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
-                          <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
-                          <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
-                          <td className="py-2 pr-3">
-                            {aFaireUI ? chip('Oui', 'amber') : chip('Non', 'green')}
-                          </td>
-                          <td className="py-2 pr-3">
-                            {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
-                          </td>
-                          <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
-                          <td className="py-2 pr-3">
-                            {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
-                          </td>
-                          <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
+                    return (
+                      <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
+                        <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
+                        <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
+                        <td className="py-2 pr-3">
+                          {aFaireUI ? chip('Oui', 'amber') : chip('Non', 'green')}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
+                        </td>
+                        <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
+                        <td className="py-2 pr-3">
+                          {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
+                        </td>
+                        <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
 
-                          <td className="py-2 pr-0">
-                            <div className="flex justify-end">
-                              <RowActionMenu
-                                onMarkToday={() => updateDevoirAction(dv.ed_devoir_id, 'today')}
-                                onMarkYesterday={() =>
-                                  updateDevoirAction(dv.ed_devoir_id, 'yesterday')
-                                }
-                                onMarkPrevious={() =>
-                                  updateDevoirAction(dv.ed_devoir_id, 'previous')
-                                }
-                                onMarkNotDone={() =>
-                                  updateDevoirAction(dv.ed_devoir_id, 'not_done')
-                                }
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                        <td className="py-2 pr-0">
+                          <div className="flex justify-end">
+                            <RowActionMenu
+                              onMarkToday={() => updateDevoirAction(dv.ed_devoir_id, 'today')}
+                              onMarkYesterday={() => updateDevoirAction(dv.ed_devoir_id, 'yesterday')}
+                              onMarkPrevious={() => updateDevoirAction(dv.ed_devoir_id, 'previous')}
+                              onMarkNotDone={() => updateDevoirAction(dv.ed_devoir_id, 'not_done')}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
           </div>
 
           {/* cette zone s'appelle FICHE DEVOIR*/}
           <div className="rounded-2xl border p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-medium flex items-center gap-2">
-                Ma fiche de travail
-                {ficheScore !== null && (
-                  <span className="text-sm text-gray-700">
-                    Score: <span className="font-semibold">{ficheScore.toFixed(2)}</span>
-                  </span>
-                )}
-                {ficheLabel && <span className="text-xs text-gray-500">({ficheLabel})</span>}
-              </h3>
-              {dbLoading && <div className="text-sm opacity-70">Chargement…</div>}
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-medium flex items-center gap-2">
+              Ma fiche de travail
+              {ficheScore !== null && (
+                <span className="text-sm text-gray-700">
+                  Score: <span className="font-semibold">{ficheScore.toFixed(2)}</span>
+                </span>
+              )}
+              {ficheLabel && <span className="text-xs text-gray-500">({ficheLabel})</span>}
+              <span className="text-xs text-gray-500">
+                (restant: {Math.max(ficheFlags.remaining, 0).toFixed(2)})
+              </span>
+            </h3>
+            {dbLoading && <div className="text-sm opacity-70">Chargement…</div>}
+          </div>
 
             {dbError && (
               <div className="rounded-lg border p-3 text-red-600 text-sm">Erreur : {dbError}</div>
@@ -717,6 +751,7 @@ export default function DevoirsPanel() {
                   <tbody>
                     {dbDevoirs.map((dv) => {
                       const aFaireUI = !Boolean(dv.effectue);
+                      const isGreen = ficheFlags.greenIds.has(dv.ed_devoir_id);
 
                       return (
                         <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
@@ -729,27 +764,28 @@ export default function DevoirsPanel() {
                             {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
                           </td>
                           <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
-                        <td className="py-2 pr-3">
-                          {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
-                        </td>
-                        <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
-                        <td className="py-2 pr-3">
-                          {isFicheGreen(dv) ? (
-                            <span className="inline-flex items-center gap-1 text-green-600">
-                              <span className="text-lg leading-none">●</span>
-                              <span className="text-xs text-gray-600">
-                                {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
+                          <td className="py-2 pr-3">
+                            {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
+                          </td>
+                          <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
+                          <td className="py-2 pr-3">
+                            {isGreen ? (
+                              <span className="inline-flex items-center gap-1 text-green-600">
+                                <span className="text-lg leading-none">●</span>
+                                <span className="text-xs text-gray-600">
+                                  {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
+                                </span>
                               </span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-red-600">
-                              <span className="text-lg leading-none">✕</span>
-                              <span className="text-xs text-gray-600">
-                                {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-red-600">
+                                <span className="text-lg leading-none">✕</span>
+                                <span className="text-xs text-gray-600">
+                                  {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
+                                </span>
                               </span>
-                            </span>
-                          )}
-                        </td>
+                            )}
+                          </td>
+
                           <td className="py-2 pr-0">
                             <div className="flex justify-end">
                               <RowActionMenu
