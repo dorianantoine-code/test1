@@ -404,27 +404,45 @@ export default function DevoirsPanel() {
   }
 
   // Helpers pour la colonne "Fiche" (zone FICHE DEVOIR)
-  function normalizeYMD(s?: string | null) {
-    if (!s) return null;
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-    const d = new Date(s);
-    if (Number.isNaN(d.getTime())) return null;
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+  function parisYMD(date: Date) {
+    const fmt = new Intl.DateTimeFormat('fr-CA', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const parts = fmt.formatToParts(date);
+    const y = parts.find((p) => p.type === 'year')?.value ?? '1970';
+    const m = parts.find((p) => p.type === 'month')?.value ?? '01';
+    const d = parts.find((p) => p.type === 'day')?.value ?? '01';
+    return `${y}-${m}-${d}`;
   }
-  function ymdPlus(days: number) {
+  function toParisYMD(value?: string | null) {
+    if (!value) return null;
+    // format dd/mm/yyyy
+    const fr = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const mFr = value.match(fr);
+    let d: Date | null = null;
+    if (mFr) {
+      const [, dd, mm, yyyy] = mFr;
+      d = new Date(`${yyyy}-${mm}-${dd}T00:00:00Z`);
+    } else {
+      d = new Date(value);
+    }
+    if (Number.isNaN(d.getTime())) return null;
+    return parisYMD(d);
+  }
+  function parisShiftYMD(days: number) {
     const d = new Date();
     d.setDate(d.getDate() + days);
-    return normalizeYMD(d.toISOString());
+    return parisYMD(d);
   }
   function isFicheGreen(dv: DbDevoir) {
-    const tomorrow = ymdPlus(1);
-    const yesterday = ymdPlus(-1);
-    const isSunday = new Date().getDay() === 0; // 0 = dimanche
-    const dueYmd = normalizeYMD(dv.due_date);
-    const realYmd = normalizeYMD(dv.date_realisation ?? undefined);
+    const tomorrow = parisShiftYMD(1);
+    const yesterday = parisShiftYMD(-1);
+    const isSunday = new Date().toLocaleDateString('en-US', { timeZone: 'Europe/Paris', weekday: 'short' }) === 'Sun';
+    const dueYmd = toParisYMD(dv.due_date ?? undefined);
+    const realYmd = toParisYMD(dv.date_realisation ?? undefined);
 
     // Règle 1 : non effectué, à faire = oui, échéance = demain
     const aFaireOui = dv.a_faire !== false; // null/undefined => considérer "oui"
@@ -711,21 +729,27 @@ export default function DevoirsPanel() {
                             {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
                           </td>
                           <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
-                          <td className="py-2 pr-3">
-                            {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
-                          </td>
-                          <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
-                          <td className="py-2 pr-3">
-                            {isFicheGreen(dv) ? (
-                              <span className="inline-flex items-center gap-1 text-green-600">
-                                <span className="text-lg leading-none">●</span>
+                        <td className="py-2 pr-3">
+                          {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
+                        </td>
+                        <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
+                        <td className="py-2 pr-3">
+                          {isFicheGreen(dv) ? (
+                            <span className="inline-flex items-center gap-1 text-green-600">
+                              <span className="text-lg leading-none">●</span>
+                              <span className="text-xs text-gray-600">
+                                {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
                               </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-red-600">
-                                <span className="text-lg leading-none">✕</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-red-600">
+                              <span className="text-lg leading-none">✕</span>
+                              <span className="text-xs text-gray-600">
+                                {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
                               </span>
-                            )}
-                          </td>
+                            </span>
+                          )}
+                        </td>
                           <td className="py-2 pr-0">
                             <div className="flex justify-end">
                               <RowActionMenu

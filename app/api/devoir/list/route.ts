@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     let q = supabase
       .from('devoir')
       .select(
-        'ed_devoir_id, ed_eleve_id, due_date, matiere, code_matiere, a_faire, effectue, interrogation, documents_a_faire, donne_le, rendre_en_ligne, last_sync_at'
+        'ed_devoir_id, ed_eleve_id, due_date, matiere, code_matiere, a_faire, effectue, interrogation, documents_a_faire, donne_le, rendre_en_ligne, last_sync_at, date_realisation'
       )
       .eq('ed_eleve_id', eleveId)
       .eq('etablissement', etab);
