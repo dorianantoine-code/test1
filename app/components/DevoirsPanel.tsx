@@ -215,6 +215,7 @@ export default function DevoirsPanel({
   const [{ token, eleveId, etablissement }, setAuth] = useState(getTokenAndEleveId);
   const [ficheScore, setFicheScore] = useState<number | null>(null);
   const [ficheLabel, setFicheLabel] = useState<string | null>(null);
+  const [ficheId, setFicheId] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<EdCdtResponse | null>(null);
@@ -614,7 +615,10 @@ export default function DevoirsPanel({
           console.warn('[DevoirsPanel] ensure fiche_devoir error', json?.error || res.status);
           return;
         }
-        if (!aborted) lastEnsuredRef.current = key;
+        if (!aborted) {
+          lastEnsuredRef.current = key;
+          setFicheId(json?.fiche?.id ?? json?.fiche?.[0]?.id ?? null);
+        }
       } catch (e: any) {
         console.warn('[DevoirsPanel] ensure fiche_devoir fail', e?.message || e);
       }
@@ -624,6 +628,30 @@ export default function DevoirsPanel({
       aborted = true;
     };
   }, [eleveId, etablissement, ficheScore]);
+
+  // Synchronise les associations fiche_devoir <-> devoirs à bulles vertes
+  useEffect(() => {
+    async function syncLinks() {
+      if (!eleveId || !ficheId) return;
+      try {
+        const ids = Array.from(ficheFlags.greenIds);
+        await fetch('/api/fiche/sync-devoirs', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({
+            ficheId,
+            eleveId,
+            etablissement,
+            devoirIds: ids,
+          }),
+        });
+      } catch (e) {
+        console.warn('[DevoirsPanel] sync fiche links failed', e);
+      }
+    }
+    syncLinks();
+  }, [ficheId, ficheFlags.greenIds, eleveId, etablissement]);
 
   return (
     <section className="space-y-4">
