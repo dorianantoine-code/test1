@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [selectedEtab, setSelectedEtab] = useState<string | null>(null);
   const [weekScore, setWeekScore] = useState<number | null>(null);
   const [devoirJson, setDevoirJson] = useState<any | null>(null);
   const [devoirJsonError, setDevoirJsonError] = useState<string | null>(null);
@@ -48,11 +49,13 @@ export default function DashboardPage() {
       const sid = sessionStorage.getItem('ed_selected_eleve_id');
       const sname = sessionStorage.getItem('ed_selected_eleve_name');
       const sphoto = sessionStorage.getItem('ed_selected_eleve_photo');
+      const setab = sessionStorage.getItem('ed_selected_eleve_etablissement');
       setToken(t);
       setLoginData(d ? JSON.parse(d) : null);
       setSelectedId(sid ? Number(sid) : null);
       setSelectedName(sname || null);
       setSelectedPhoto(sphoto || null);
+      setSelectedEtab(setab || null);
     } catch {}
   }, []);
 
@@ -100,15 +103,21 @@ export default function DashboardPage() {
     selectedId,
   ]);
 
-  const selectedEtab = useMemo(() => {
-    const eleve = selectedElevePayload as any;
-    return (
+  // complète l'établissement depuis le payload élève si dispo
+  useEffect(() => {
+    const eleve: any = selectedElevePayload;
+    const fromPayload =
       eleve?.idEtablissement ||
       eleve?.etablissement?.id ||
       eleve?.etablissement ||
-      sessionStorage.getItem('ed_selected_eleve_etablissement') ||
-      null
-    );
+      eleve?.nomEtablissement ||
+      null;
+    if (fromPayload) {
+      setSelectedEtab(String(fromPayload));
+      try {
+        sessionStorage.setItem('ed_selected_eleve_etablissement', String(fromPayload));
+      } catch {}
+    }
   }, [selectedElevePayload]);
 
   // Debug JSON des devoirs (source Supabase après merge ED)
@@ -224,13 +233,6 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               </section>
-              {weekScore !== null && (
-                <div className="rounded-xl border p-4 bg-gray-50">
-                  <div className="text-sm text-gray-800">Score dispo (jusqu’au jeudi)</div>
-                  <div className="text-xl font-semibold text-black">{weekScore}</div>
-                </div>
-              )}
-   
               {/* Passe le callback pour récupérer la valeur */}
               <CalculDispo onAggregateScore={(score) => setWeekScore(score)} />
               {/* Liste les devoirs */}

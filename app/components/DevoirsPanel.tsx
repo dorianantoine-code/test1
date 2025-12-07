@@ -203,6 +203,8 @@ function RowActionMenu({
 
 export default function DevoirsPanel() {
   const [{ token, eleveId, etablissement }, setAuth] = useState(getTokenAndEleveId);
+  const [ficheScore, setFicheScore] = useState<number | null>(null);
+  const [ficheLabel, setFicheLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<EdCdtResponse | null>(null);
@@ -217,6 +219,31 @@ export default function DevoirsPanel() {
     const onStorage = () => setAuth(getTokenAndEleveId());
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // Récupère le score de fiche depuis CalculDispo (stocké en sessionStorage)
+  useEffect(() => {
+    function loadScore() {
+      try {
+        const lbl = sessionStorage.getItem('calcdispo_day_label') || null;
+        const scoreStr = sessionStorage.getItem('calcdispo_day_score');
+        const val = scoreStr ? parseFloat(scoreStr) : NaN;
+        if (!Number.isNaN(val)) setFicheScore(val);
+        else setFicheScore(null);
+        setFicheLabel(lbl);
+      } catch {
+        setFicheScore(null);
+        setFicheLabel(null);
+      }
+    }
+    loadScore();
+    const onStorage = () => loadScore();
+    window.addEventListener('storage', onStorage);
+    const timer = window.setInterval(loadScore, 1200);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(timer);
+    };
   }, []);
 
   const disabled = useMemo(() => !token || !eleveId, [token, eleveId]);
@@ -299,15 +326,15 @@ export default function DevoirsPanel() {
     (async () => {
       try {
         setSyncError(null);
-      const res = await fetch('/api/devoir/sync', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({
-          eleveId,
-          etablissement,
-          cdtData: normalized,
-        }),
+        const res = await fetch('/api/devoir/sync', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({
+            eleveId,
+            etablissement,
+            cdtData: normalized,
+          }),
         });
         let json: any = null;
         try {
@@ -378,7 +405,7 @@ export default function DevoirsPanel() {
 
   async function updateDevoirAction(
     ed_devoir_id: number,
-    action: 'today' | 'yesterday' | 'previous' | 'not_done'
+    action: 'today' | 'yesterday' | 'previous' | 'not_done',
   ) {
     if (!eleveId) return;
 
@@ -389,10 +416,11 @@ export default function DevoirsPanel() {
           ? {
               ...r,
               effectue: action === 'not_done' ? false : true,
-              date_realisation: action === 'not_done' ? null : r.date_realisation ?? new Date().toISOString(),
+              date_realisation:
+                action === 'not_done' ? null : r.date_realisation ?? new Date().toISOString(),
             }
-          : r
-      )
+          : r,
+      ),
     );
 
     try {
@@ -417,6 +445,70 @@ export default function DevoirsPanel() {
       await reloadFromDb(); // annule l'optimistic en cas d’erreur
     }
   }
+
+  // === Fiche de devoir du jour / week-end ===
+  function todayParisYMD() {
+    const fmt = new Intl.DateTimeFormat('fr-CA', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const parts = fmt.formatToParts(new Date());
+    const y = parts.find((p) => p.type === 'year')?.value ?? '1970';
+    const m = parts.find((p) => p.type === 'month')?.value ?? '01';
+    const d = parts.find((p) => p.type === 'day')?.value ?? '01';
+    return `${y}-${m}-${d}`;
+  }
+
+  function weekendAnchor(dateYMD: string) {
+    const [y, m, d] = dateYMD.split('-').map((n) => parseInt(n, 10));
+    const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+    const wd = dt.getUTCDay(); // 0=dim..6=sam
+    if (wd === 6) {
+      // samedi -> lui-même
+      return dateYMD;
+    }
+    if (wd === 0) {
+      // dimanche -> samedi précédent
+      const sat = new Date(dt);
+      sat.setUTCDate(dt.getUTCDate() - 1);
+      return sat.toISOString().slice(0, 10);
+    }
+    return dateYMD;
+  }
+
+  const lastEnsuredRef = useRef<string | null>(null);
+  useEffect(() => {
+    let aborted = false;
+    async function ensureFiche() {
+      if (!eleveId || ficheScore === null) return;
+      const today = todayParisYMD();
+      const anchor = weekendAnchor(today);
+      const key = `${eleveId}|${anchor}|${etablissement ?? ''}`;
+      if (lastEnsuredRef.current === key) return;
+      try {
+        const res = await fetch('/api/fiche/upsert', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({ eleveId, jour: anchor, etablissement, score: ficheScore }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || json?.error) {
+          console.warn('[DevoirsPanel] ensure fiche_devoir error', json?.error || res.status);
+          return;
+        }
+        if (!aborted) lastEnsuredRef.current = key;
+      } catch (e: any) {
+        console.warn('[DevoirsPanel] ensure fiche_devoir fail', e?.message || e);
+      }
+    }
+    ensureFiche();
+    return () => {
+      aborted = true;
+    };
+  }, [eleveId, etablissement, ficheScore]);
 
   return (
     <section className="space-y-4">
@@ -457,73 +549,169 @@ export default function DevoirsPanel() {
       )}
 
       {!disabled && (
-        <div className="rounded-2xl border p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-medium">Prochains devoirs (depuis la base)</h3>
-            {dbLoading && <div className="text-sm opacity-70">Chargement…</div>}
+        <>
+          <div className="rounded-2xl border p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-medium">Prochains devoirs (depuis la base)</h3>
+              {dbLoading && <div className="text-sm opacity-70">Chargement…</div>}
+            </div>
+
+            {dbError && (
+              <div className="rounded-lg border p-3 text-red-600 text-sm">Erreur : {dbError}</div>
+            )}
+
+            {!dbError && !dbLoading && (!dbDevoirs || dbDevoirs.length === 0) && (
+              <div className="rounded-lg border p-3 text-sm">Aucun devoir à venir.</div>
+            )}
+
+            {!dbError && !dbLoading && dbDevoirs && dbDevoirs.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="py-2 pr-3">Date</th>
+                      <th className="py-2 pr-3">Matière</th>
+                      <th className="py-2 pr-3">À faire</th>
+                      <th className="py-2 pr-3">Contrôle</th>
+                      <th className="py-2 pr-3">Score matière</th>
+                      <th className="py-2 pr-3">Score contrôle</th>
+                      <th className="py-2 pr-3">Score</th>
+                      <th className="py-2 pr-0 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dbDevoirs.map((dv) => {
+                      const aFaireUI = !Boolean(dv.effectue);
+
+                      return (
+                        <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
+                          <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
+                          <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
+                          <td className="py-2 pr-3">
+                            {aFaireUI ? chip('Oui', 'amber') : chip('Non', 'green')}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
+                          </td>
+                          <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
+                          <td className="py-2 pr-3">
+                            {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
+                          </td>
+                          <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
+
+                          <td className="py-2 pr-0">
+                            <div className="flex justify-end">
+                              <RowActionMenu
+                                onMarkToday={() => updateDevoirAction(dv.ed_devoir_id, 'today')}
+                                onMarkYesterday={() =>
+                                  updateDevoirAction(dv.ed_devoir_id, 'yesterday')
+                                }
+                                onMarkPrevious={() =>
+                                  updateDevoirAction(dv.ed_devoir_id, 'previous')
+                                }
+                                onMarkNotDone={() =>
+                                  updateDevoirAction(dv.ed_devoir_id, 'not_done')
+                                }
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
-          {dbError && (
-            <div className="rounded-lg border p-3 text-red-600 text-sm">Erreur : {dbError}</div>
-          )}
-
-          {!dbError && !dbLoading && (!dbDevoirs || dbDevoirs.length === 0) && (
-            <div className="rounded-lg border p-3 text-sm">Aucun devoir à venir.</div>
-          )}
-
-          {!dbError && !dbLoading && dbDevoirs && dbDevoirs.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="py-2 pr-3">Date</th>
-                    <th className="py-2 pr-3">Matière</th>
-                    <th className="py-2 pr-3">À faire</th>
-                    <th className="py-2 pr-3">Contrôle</th>
-                    <th className="py-2 pr-3">Score matière</th>
-                    <th className="py-2 pr-3">Score contrôle</th>
-                    <th className="py-2 pr-3">Score</th>
-                    <th className="py-2 pr-0 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dbDevoirs.map((dv) => {
-                    const aFaireUI = !Boolean(dv.effectue);
-
-                    return (
-                      <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
-                        <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
-                        <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
-                        <td className="py-2 pr-3">
-                          {aFaireUI ? chip('Oui', 'amber') : chip('Non', 'green')}
-                        </td>
-                        <td className="py-2 pr-3">
-                          {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
-                        </td>
-                        <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
-                        <td className="py-2 pr-3">
-                          {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
-                        </td>
-                        <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
-
-                        <td className="py-2 pr-0">
-                          <div className="flex justify-end">
-                            <RowActionMenu
-                              onMarkToday={() => updateDevoirAction(dv.ed_devoir_id, 'today')}
-                              onMarkYesterday={() => updateDevoirAction(dv.ed_devoir_id, 'yesterday')}
-                              onMarkPrevious={() => updateDevoirAction(dv.ed_devoir_id, 'previous')}
-                              onMarkNotDone={() => updateDevoirAction(dv.ed_devoir_id, 'not_done')}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {/* cette zone s'appelle FICHE DEVOIR*/}
+          <div className="rounded-2xl border p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-medium flex items-center gap-2">
+                Ma fiche de travail
+                {ficheScore !== null && (
+                  <span className="text-sm text-gray-700">
+                    Score: <span className="font-semibold">{ficheScore.toFixed(2)}</span>
+                  </span>
+                )}
+                {ficheLabel && <span className="text-xs text-gray-500">({ficheLabel})</span>}
+              </h3>
+              {dbLoading && <div className="text-sm opacity-70">Chargement…</div>}
             </div>
-          )}
-        </div>
+
+            {dbError && (
+              <div className="rounded-lg border p-3 text-red-600 text-sm">Erreur : {dbError}</div>
+            )}
+
+            {!dbError && !dbLoading && (!dbDevoirs || dbDevoirs.length === 0) && (
+              <div className="rounded-lg border p-3 text-sm">Aucun devoir à venir.</div>
+            )}
+
+            {!dbError && !dbLoading && dbDevoirs && dbDevoirs.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="py-2 pr-3">Date</th>
+                      <th className="py-2 pr-3">Matière</th>
+                      <th className="py-2 pr-3">À faire</th>
+                      <th className="py-2 pr-3">Contrôle</th>
+                      <th className="py-2 pr-3">Score matière</th>
+                      <th className="py-2 pr-3">Score contrôle</th>
+                      <th className="py-2 pr-3">Score</th>
+                      <th className="py-2 pr-3">Fiche</th>
+                      <th className="py-2 pr-0 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dbDevoirs.map((dv) => {
+                      const aFaireUI = !Boolean(dv.effectue);
+
+                      return (
+                        <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
+                          <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
+                          <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
+                          <td className="py-2 pr-3">
+                            {aFaireUI ? chip('Oui', 'amber') : chip('Non', 'green')}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
+                          </td>
+                          <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
+                          <td className="py-2 pr-3">
+                            {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
+                          </td>
+                          <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
+                          <td className="py-2 pr-3">
+                            <span className="inline-flex items-center gap-1 text-red-600">
+                              <span className="text-lg leading-none">✕</span>
+                            </span>
+                          </td>
+                          <td className="py-2 pr-0">
+                            <div className="flex justify-end">
+                              <RowActionMenu
+                                onMarkToday={() => updateDevoirAction(dv.ed_devoir_id, 'today')}
+                                onMarkYesterday={() =>
+                                  updateDevoirAction(dv.ed_devoir_id, 'yesterday')
+                                }
+                                onMarkPrevious={() =>
+                                  updateDevoirAction(dv.ed_devoir_id, 'previous')
+                                }
+                                onMarkNotDone={() =>
+                                  updateDevoirAction(dv.ed_devoir_id, 'not_done')
+                                }
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </section>
   );

@@ -19,7 +19,7 @@ function todayInParis(): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { eleveId, jour, etablissement } = await req.json();
+    const { eleveId, jour, etablissement, score } = await req.json();
     if (!eleveId || !Number.isFinite(Number(eleveId))) {
       return NextResponse.json({ error: 'eleveId manquant ou invalide' }, { status: 400 });
     }
@@ -52,29 +52,50 @@ export async function POST(req: NextRequest) {
     const jourStr: string =
       typeof jour === 'string' && jour.length >= 10 ? jour.slice(0, 10) : todayInParis();
 
-    // 2) Upsert (1 fiche par élève + etablissement et par jour)
+    // 2) Upsert manuel (sans contrainte unique requise)
     const payload = {
       ed_eleve_id: Number(eleveId),
       etablissement: etab,
       jour: jourStr, // Postgres cast -> date
       updated_at: new Date().toISOString(), // utile même si trigger existe
+      score: score != null && Number.isFinite(Number(score)) ? Number(score) : null,
     };
 
-    const { data: upserted, error: upsertErr } = await supabase
+    // cherche une fiche existante
+    const { data: existing, error: findErr } = await supabase
       .from('fiche_devoir')
-      .upsert(payload, {
-        onConflict: 'ed_eleve_id,etablissement,jour',
-        ignoreDuplicates: false,
-        defaultToNull: false,
-      })
-      .select()
-      .limit(1);
+      .select('id')
+      .eq('ed_eleve_id', payload.ed_eleve_id)
+      .eq('etablissement', payload.etablissement)
+      .eq('jour', payload.jour)
+      .maybeSingle();
 
-    if (upsertErr) {
-      return NextResponse.json({ error: upsertErr.message }, { status: 500 });
+    if (findErr) {
+      return NextResponse.json({ error: findErr.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, jour: jourStr, fiche: upserted?.[0] ?? null });
+    if (existing?.id) {
+      const { data: updated, error: updErr } = await supabase
+        .from('fiche_devoir')
+        .update(payload)
+        .eq('id', existing.id)
+        .select()
+        .maybeSingle();
+      if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+      return NextResponse.json({ ok: true, jour: jourStr, fiche: updated ?? null });
+    }
+
+    const { data: inserted, error: insErr } = await supabase
+      .from('fiche_devoir')
+      .insert(payload)
+      .select()
+      .maybeSingle();
+
+    if (insErr) {
+      return NextResponse.json({ error: insErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, jour: jourStr, fiche: inserted ?? null });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Erreur inconnue' }, { status: 500 });
   }

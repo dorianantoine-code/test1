@@ -194,6 +194,9 @@ type Props = {
 
 export default function CalculDispo({ onAggregateScore }: Props) {
   const [{ token, eleveId, etablissement }, setAuth] = useState(getTokenAndEleveId);
+  const [vitesseCoef, setVitesseCoef] = useState<number>(1);
+  const [vitesseLabel, setVitesseLabel] = useState<string>('Normal');
+  const [vitesseErr, setVitesseErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -214,6 +217,42 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  // coef vitesse de travail
+  useEffect(() => {
+    let aborted = false;
+    async function run() {
+      if (!eleveId) return;
+      setVitesseErr(null);
+      try {
+        const res = await fetch('/api/eleve/vitesse', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({ eleveId, etablissement }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+        const val = Number(json.value ?? 1);
+        if (!aborted) {
+          setVitesseCoef(val >= 1 && val <= 3 ? val : 1);
+          setVitesseLabel(
+            json.label || (val === 1 ? 'Très lent' : val === 3 ? 'Très rapide' : 'Normal'),
+          );
+        }
+      } catch (e: any) {
+        if (!aborted) {
+          setVitesseErr(e?.message || 'Erreur récupération vitesse');
+          setVitesseCoef(1);
+          setVitesseLabel('Normal');
+        }
+      }
+    }
+    run();
+    return () => {
+      aborted = true;
+    };
+  }, [eleveId, etablissement]);
 
   // EDT
   useEffect(() => {
@@ -378,23 +417,23 @@ export default function CalculDispo({ onAggregateScore }: Props) {
   // expose au parent + sessionStorage
   useEffect(() => {
     if (typeof aggregateScore === 'number') {
-      onAggregateScore?.(aggregateScore, aggFrom, aggTo);
+      onAggregateScore?.(aggregateScore * vitesseCoef, aggFrom, aggTo);
       try {
-        sessionStorage.setItem('calcdispo_week_score', String(aggregateScore));
+        sessionStorage.setItem('calcdispo_week_score', String(aggregateScore * vitesseCoef));
         sessionStorage.setItem('calcdispo_week_from', aggFrom);
         sessionStorage.setItem('calcdispo_week_to', aggTo);
       } catch {}
     }
-  }, [aggregateScore, aggFrom, aggTo, onAggregateScore]);
+  }, [aggregateScore, aggFrom, aggTo, onAggregateScore, vitesseCoef]);
 
   useEffect(() => {
     try {
       sessionStorage.setItem('calcdispo_day_label', dayLabel);
-      sessionStorage.setItem('calcdispo_day_score', String(dayScore));
+      sessionStorage.setItem('calcdispo_day_score', String(dayScore * vitesseCoef));
       if (weekendFrom) sessionStorage.setItem('calcdispo_weekend_from', weekendFrom);
       if (weekendTo) sessionStorage.setItem('calcdispo_weekend_to', weekendTo);
     } catch {}
-  }, [dayLabel, dayScore, weekendFrom, weekendTo]);
+  }, [dayLabel, dayScore, weekendFrom, weekendTo, vitesseCoef]);
 
   return (
     <section className="rounded-2xl border p-6 space-y-4">
@@ -406,22 +445,38 @@ export default function CalculDispo({ onAggregateScore }: Props) {
         <div className="rounded-xl border p-4 bg-gray-50">
           <div className="text-sm text-gray-800">Score total (aujourd’hui → jeudi prochain)</div>
           <div className="text-2xl font-semibold text-black">
-            {aggregateScore.toFixed(2)}{' '}
+            {(aggregateScore * vitesseCoef).toFixed(2)}{' '}
             <span className="text-base font-normal text-gray-700">
               ({aggFrom} → {aggTo})
             </span>
+            <span className="block text-xs text-gray-600 mt-1">
+              Détail : {aggregateScore.toFixed(2)} × coef {vitesseCoef} ({vitesseLabel})
+            </span>
+            <div className="mt-2 text-xs text-gray-700 space-y-1">
+              <div className="font-semibold">Détail du calcul :</div>
+              <ul className="list-disc ml-4 space-y-1">
+                <li>Somme des scores quotidiens de {aggFrom} à {aggTo}</li>
+                <li>Score quotidien = score base (EDT/congés) + score perso (agenda perso)</li>
+                <li>Score base : 3 si congés, 2 si sortie &lt; 15h, 1.5 si 15h-16h, sinon 1</li>
+                <li>Score perso : -1 si événement perso sur le jour, sinon 0</li>
+                <li>Score total affiché = somme × coef vitesse travail ({vitesseLabel})</li>
+              </ul>
+            </div>
           </div>
         </div>
 
         <div className="rounded-xl border p-4 bg-gray-50">
           <div className="text-sm text-gray-800">{dayLabel}</div>
           <div className="text-2xl font-semibold text-black">
-            {dayScore.toFixed(2)}{' '}
+            {(dayScore * vitesseCoef).toFixed(2)}{' '}
             {dayLabel === 'Score week-end' && weekendFrom && weekendTo && (
               <span className="text-base font-normal text-gray-700">
                 ({weekendFrom} + {weekendTo})
               </span>
             )}
+            <span className="block text-xs text-gray-600 mt-1">
+              Détail : {dayScore.toFixed(2)} × coef {vitesseCoef} ({vitesseLabel})
+            </span>
           </div>
         </div>
       </div>
