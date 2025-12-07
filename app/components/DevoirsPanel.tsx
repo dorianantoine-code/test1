@@ -471,19 +471,29 @@ export default function DevoirsPanel({
     return false;
   }
 
+  // Tri commun (date croissante puis score croissant)
+  const sortedDevoirs = useMemo(() => {
+    const norm = (s?: string | null) => toParisYMD(s ?? undefined) ?? '9999-12-31';
+    return [...dbDevoirs].sort((a, b) => {
+      const da = norm(a.due_date);
+      const db = norm(b.due_date);
+      if (da !== db) return da.localeCompare(db);
+      const sa = Number(a.score ?? 1);
+      const sb = Number(b.score ?? 1);
+      return sb - sa; // score décroissant à date égale
+    });
+  }, [dbDevoirs]);
+
   // Calcul des bulles vertes + score restant (zone FICHE DEVOIR)
   function computeFicheFlags() {
     const greenIds = new Set<number>();
-    if (!dbDevoirs || dbDevoirs.length === 0) {
+    if (!sortedDevoirs || sortedDevoirs.length === 0) {
       return { greenIds, remaining: ficheScore ?? 0 };
     }
 
-    const normDate = (s?: string | null) => toParisYMD(s ?? undefined) ?? '9999-12-31';
-    const sorted = [...dbDevoirs].sort((a, b) => normDate(a.due_date).localeCompare(normDate(b.due_date)));
-
     // 1) verts de base
     let sumBase = 0;
-    for (const dv of sorted) {
+    for (const dv of sortedDevoirs) {
       if (isFicheGreen(dv)) {
         greenIds.add(dv.ed_devoir_id);
         sumBase += Number(dv.score ?? 1);
@@ -494,7 +504,7 @@ export default function DevoirsPanel({
 
     // 2) compléter avec les premières croix rouges tant qu'il reste du score
     if (remaining > 0) {
-      for (const dv of sorted) {
+      for (const dv of sortedDevoirs) {
         if (greenIds.has(dv.ed_devoir_id)) continue;
         const lineScore = Number(dv.score ?? 1);
         greenIds.add(dv.ed_devoir_id);
@@ -767,9 +777,9 @@ export default function DevoirsPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {dbDevoirs.map((dv) => {
-                    const aFaireUI = !Boolean(dv.effectue);
-                    const isGreen = ficheFlags.greenIds.has(dv.ed_devoir_id);
+                    {sortedDevoirs.map((dv) => {
+                      const aFaireUI = !Boolean(dv.effectue);
+                      const isGreen = ficheFlags.greenIds.has(dv.ed_devoir_id);
 
                     return (
                       <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
