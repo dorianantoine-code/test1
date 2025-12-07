@@ -905,8 +905,8 @@ export default function DevoirsPanel({
                               type="button"
                               className={`w-36 px-3 py-1 text-sm rounded-md border transition ${
                                 dejaFait
-                                  ? 'border-green-700 text-green-800 hover:bg-green-50'
-                                  : 'border-gray-800 text-gray-900 hover:bg-gray-100'
+                                  ? 'border-green-700 text-green-800 bg-white hover:bg-green-50'
+                                  : 'border-gray-600 text-black bg-white hover:bg-gray-100'
                               }`}
                               onClick={() =>
                                 updateDevoirAction(dv.ed_devoir_id, dejaFait ? 'not_done' : 'today')
