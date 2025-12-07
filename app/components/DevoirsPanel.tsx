@@ -522,6 +522,16 @@ export default function DevoirsPanel({
     () => sortedDevoirs.filter((dv) => ficheFlags.greenIds.has(dv.ed_devoir_id)),
     [sortedDevoirs, ficheFlags.greenIds],
   );
+  const controlesACommencer = useMemo(
+    () =>
+      sortedDevoirs.filter(
+        (dv) =>
+          !ficheFlags.greenIds.has(dv.ed_devoir_id) &&
+          dv.interrogation === true &&
+          dv.a_faire !== false,
+      ),
+    [sortedDevoirs, ficheFlags.greenIds],
+  );
 
   async function updateDevoirAction(
     ed_devoir_id: number,
@@ -921,6 +931,61 @@ export default function DevoirsPanel({
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {controlesACommencer.length > 0 && (
+            <div className="mt-6">
+              <h4 className="text-md font-semibold mb-3">
+                et si j&apos;ai le temps je commence à préparer :
+              </h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="py-2 pr-3">Date</th>
+                      <th className="py-2 pr-3">Matière</th>
+                      <th className="py-2 pr-3">Déjà fait</th>
+                      <th className="py-2 pr-3">Contrôle</th>
+                      <th className="py-2 pr-0 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {controlesACommencer.map((dv) => {
+                      const dejaFait = Boolean(dv.effectue);
+                      return (
+                        <tr key={`prep-${dv.ed_devoir_id}`} className="border-b last:border-0">
+                          <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
+                          <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
+                          <td className="py-2 pr-3">
+                            {dejaFait ? chip('Oui', 'green') : chip('Non', 'amber')}
+                          </td>
+                          <td className="py-2 pr-3">
+                            {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
+                          </td>
+                          <td className="py-2 pr-0">
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                className={`w-36 px-3 py-1 text-sm rounded-md border transition ${
+                                  dejaFait
+                                    ? 'border-green-700 text-green-800 bg-white hover:bg-green-50'
+                                    : 'border-gray-600 text-black bg-white hover:bg-gray-100'
+                                }`}
+                                onClick={() =>
+                                  updateDevoirAction(dv.ed_devoir_id, dejaFait ? 'not_done' : 'today')
+                                }
+                              >
+                                {dejaFait ? 'Marquer non fait' : 'Marquer fait'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
