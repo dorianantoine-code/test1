@@ -809,9 +809,9 @@ export default function DevoirsPanel({
                   </tr>
                 </thead>
                 <tbody>
-                    {sortedDevoirs.map((dv) => {
-                      const aFaireUI = !Boolean(dv.effectue);
-                      const isGreen = ficheFlags.greenIds.has(dv.ed_devoir_id);
+                  {sortedDevoirs.map((dv) => {
+                    const aFaireUI = !Boolean(dv.effectue);
+                    const isGreen = ficheFlags.greenIds.has(dv.ed_devoir_id);
 
                     return (
                       <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
@@ -850,9 +850,7 @@ export default function DevoirsPanel({
                           <div className="flex justify-end">
                             <RowActionMenu
                               onMarkToday={() => updateDevoirAction(dv.ed_devoir_id, 'today')}
-                              onMarkYesterday={() =>
-                                updateDevoirAction(dv.ed_devoir_id, 'yesterday')
-                              }
+                              onMarkYesterday={() => updateDevoirAction(dv.ed_devoir_id, 'yesterday')}
                               onMarkPrevious={() => updateDevoirAction(dv.ed_devoir_id, 'previous')}
                               onMarkNotDone={() => updateDevoirAction(dv.ed_devoir_id, 'not_done')}
                             />
@@ -865,61 +863,66 @@ export default function DevoirsPanel({
               </table>
             </div>
           )}
+        </div>
+      )}
 
-          {/* Bloc Aujourd'hui je travaille sur : */}
-          <div className="mt-6">
-            <h4 className="text-md font-semibold mb-3">Aujourd&apos;hui je travaille sur :</h4>
-            {ficheDevoirs.length === 0 ? (
-              <div className="rounded-lg border p-3 text-sm">Aucun devoir associé à la fiche.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="py-2 pr-3">Date</th>
-                      <th className="py-2 pr-3">Matière</th>
-                      <th className="py-2 pr-3">Déjà fait</th>
-                      <th className="py-2 pr-3">Contrôle</th>
-                      <th className="py-2 pr-0 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ficheDevoirs.map((dv) => {
-                      const dejaFait = Boolean(dv.effectue);
-                      return (
-                        <tr key={`fiche-${dv.ed_devoir_id}`} className="border-b last:border-0">
-                          <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
-                          <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
-                          <td className="py-2 pr-3">
-                            {dejaFait ? chip('Oui', 'green') : chip('Non', 'amber')}
-                          </td>
-                          <td className="py-2 pr-3">
-                            {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
-                          </td>
-                          <td className="py-2 pr-0">
-                            <div className="flex justify-end">
-                              <button
-                                type="button"
-                                className="px-3 py-1 text-sm rounded-md border hover:bg-gray-50"
-                                onClick={() =>
-                                  updateDevoirAction(
-                                    dv.ed_devoir_id,
-                                    dejaFait ? 'not_done' : 'today',
-                                  )
-                                }
-                              >
-                                {dejaFait ? 'Marquer non fait' : 'Marquer fait'}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+      {/* Bloc autonome : Aujourd'hui je travaille sur */}
+      {!disabled && showFiche && (
+        <div className="rounded-2xl border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-md font-semibold">Aujourd&apos;hui je travaille sur :</h4>
           </div>
+          {ficheDevoirs.length === 0 ? (
+            <div className="rounded-lg border p-3 text-sm">Aucun devoir associé à la fiche.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="py-2 pr-3">Date</th>
+                    <th className="py-2 pr-3">Matière</th>
+                    <th className="py-2 pr-3">Déjà fait</th>
+                    <th className="py-2 pr-3">Contrôle</th>
+                    <th className="py-2 pr-0 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ficheDevoirs.map((dv) => {
+                    const dejaFait = Boolean(dv.effectue);
+                    return (
+                      <tr key={`fiche-${dv.ed_devoir_id}`} className="border-b last:border-0">
+                        <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
+                        <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
+                        <td className="py-2 pr-3">
+                          {dejaFait ? chip('Oui', 'green') : chip('Non', 'amber')}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
+                        </td>
+                        <td className="py-2 pr-0">
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              className={`w-36 px-3 py-1 text-sm rounded-md border transition ${
+                                dejaFait
+                                  ? 'border-green-700 text-green-800 hover:bg-green-50'
+                                  : 'border-gray-800 text-gray-900 hover:bg-gray-100'
+                              }`}
+                              onClick={() =>
+                                updateDevoirAction(dv.ed_devoir_id, dejaFait ? 'not_done' : 'today')
+                              }
+                            >
+                              {dejaFait ? 'Marquer non fait' : 'Marquer fait'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </section>
