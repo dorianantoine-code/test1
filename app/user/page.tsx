@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 
@@ -11,7 +11,7 @@ type Row = {
   created_at: string;
 };
 
-export default function UserPage() {
+function UserPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const id = searchParams.get("id");
@@ -64,5 +64,13 @@ export default function UserPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function UserPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center p-6">Chargement…</div>}>
+      <UserPageInner />
+    </Suspense>
   );
 }
