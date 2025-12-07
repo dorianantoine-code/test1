@@ -403,6 +403,39 @@ export default function DevoirsPanel() {
     return <span className={cx}>{String(v)}</span>;
   }
 
+  // Helpers pour la colonne "Fiche" (zone FICHE DEVOIR)
+  function normalizeYMD(s?: string | null) {
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return null;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  function ymdPlus(days: number) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return normalizeYMD(d.toISOString());
+  }
+  function isFicheGreen(dv: DbDevoir) {
+    const tomorrow = ymdPlus(1);
+    const yesterday = ymdPlus(-1);
+    const isSunday = new Date().getDay() === 0; // 0 = dimanche
+    const dueYmd = normalizeYMD(dv.due_date);
+    const realYmd = normalizeYMD(dv.date_realisation ?? undefined);
+
+    // Règle 1 : non effectué, à faire = oui, échéance = demain
+    const aFaireOui = dv.a_faire !== false; // null/undefined => considérer "oui"
+    if (!dv.effectue && aFaireOui && dueYmd && tomorrow && dueYmd === tomorrow) return true;
+
+    // Règle 2 : dimanche, déjà effectué hier (samedi)
+    if (isSunday && dv.effectue && realYmd && yesterday && realYmd === yesterday) return true;
+
+    return false;
+  }
+
   async function updateDevoirAction(
     ed_devoir_id: number,
     action: 'today' | 'yesterday' | 'previous' | 'not_done',
@@ -683,9 +716,15 @@ export default function DevoirsPanel() {
                           </td>
                           <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
                           <td className="py-2 pr-3">
-                            <span className="inline-flex items-center gap-1 text-red-600">
-                              <span className="text-lg leading-none">✕</span>
-                            </span>
+                            {isFicheGreen(dv) ? (
+                              <span className="inline-flex items-center gap-1 text-green-600">
+                                <span className="text-lg leading-none">●</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-red-600">
+                                <span className="text-lg leading-none">✕</span>
+                              </span>
+                            )}
                           </td>
                           <td className="py-2 pr-0">
                             <div className="flex justify-end">
