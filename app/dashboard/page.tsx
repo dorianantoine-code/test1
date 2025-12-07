@@ -235,8 +235,8 @@ export default function DashboardPage() {
               </section>
               {/* Passe le callback pour récupérer la valeur */}
               <CalculDispo onAggregateScore={(score) => setWeekScore(score)} />
-              {/* Liste les devoirs */}
-              <DevoirsPanel />
+              {/* Liste les devoirs (uniquement la fiche de travail sur le dashboard) */}
+              <DevoirsPanel showProchains={false} showFiche />
 
               {/* Debug: payload élève sélectionné */}
               <section className="rounded-2xl border p-4 space-y-2">

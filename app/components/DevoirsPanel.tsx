@@ -201,7 +201,17 @@ function RowActionMenu({
   );
 }
 
-export default function DevoirsPanel() {
+type Props = {
+  onAggregateScore?: (score: number, from: string, to: string) => void;
+  showProchains?: boolean;
+  showFiche?: boolean;
+};
+
+export default function DevoirsPanel({
+  onAggregateScore,
+  showProchains = true,
+  showFiche = true,
+}: Props) {
   const [{ token, eleveId, etablissement }, setAuth] = useState(getTokenAndEleveId);
   const [ficheScore, setFicheScore] = useState<number | null>(null);
   const [ficheLabel, setFicheLabel] = useState<string | null>(null);
@@ -643,21 +653,20 @@ export default function DevoirsPanel() {
         </div>
       )}
 
-      {!disabled && (
-        <>
-          <div className="rounded-2xl border p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-medium">Prochains devoirs (depuis la base)</h3>
-              {dbLoading && <div className="text-sm opacity-70">Chargement…</div>}
-            </div>
+      {!disabled && showProchains && (
+        <div className="rounded-2xl border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-medium">Prochains devoirs (depuis la base)</h3>
+            {dbLoading && <div className="text-sm opacity-70">Chargement…</div>}
+          </div>
 
-            {dbError && (
-              <div className="rounded-lg border p-3 text-red-600 text-sm">Erreur : {dbError}</div>
-            )}
+          {dbError && (
+            <div className="rounded-lg border p-3 text-red-600 text-sm">Erreur : {dbError}</div>
+          )}
 
-            {!dbError && !dbLoading && (!dbDevoirs || dbDevoirs.length === 0) && (
-              <div className="rounded-lg border p-3 text-sm">Aucun devoir à venir.</div>
-            )}
+          {!dbError && !dbLoading && (!dbDevoirs || dbDevoirs.length === 0) && (
+            <div className="rounded-lg border p-3 text-sm">Aucun devoir à venir.</div>
+          )}
 
           {!dbError && !dbLoading && dbDevoirs && dbDevoirs.length > 0 && (
             <div className="overflow-x-auto">
@@ -711,10 +720,12 @@ export default function DevoirsPanel() {
               </table>
             </div>
           )}
-          </div>
+        </div>
+      )}
 
-          {/* cette zone s'appelle FICHE DEVOIR*/}
-          <div className="rounded-2xl border p-4">
+      {/* cette zone s'appelle FICHE DEVOIR*/}
+      {!disabled && showFiche && (
+        <div className="rounded-2xl border p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-medium flex items-center gap-2">
               Ma fiche de travail
@@ -731,93 +742,88 @@ export default function DevoirsPanel() {
             {dbLoading && <div className="text-sm opacity-70">Chargement…</div>}
           </div>
 
-            {dbError && (
-              <div className="rounded-lg border p-3 text-red-600 text-sm">Erreur : {dbError}</div>
-            )}
+          {dbError && (
+            <div className="rounded-lg border p-3 text-red-600 text-sm">Erreur : {dbError}</div>
+          )}
 
-            {!dbError && !dbLoading && (!dbDevoirs || dbDevoirs.length === 0) && (
-              <div className="rounded-lg border p-3 text-sm">Aucun devoir à venir.</div>
-            )}
+          {!dbError && !dbLoading && (!dbDevoirs || dbDevoirs.length === 0) && (
+            <div className="rounded-lg border p-3 text-sm">Aucun devoir à venir.</div>
+          )}
 
-            {!dbError && !dbLoading && dbDevoirs && dbDevoirs.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="py-2 pr-3">Date</th>
-                      <th className="py-2 pr-3">Matière</th>
-                      <th className="py-2 pr-3">À faire</th>
-                      <th className="py-2 pr-3">Contrôle</th>
-                      <th className="py-2 pr-3">Score matière</th>
-                      <th className="py-2 pr-3">Score contrôle</th>
-                      <th className="py-2 pr-3">Score</th>
-                      <th className="py-2 pr-3">Fiche</th>
-                      <th className="py-2 pr-0 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dbDevoirs.map((dv) => {
-                      const aFaireUI = !Boolean(dv.effectue);
-                      const isGreen = ficheFlags.greenIds.has(dv.ed_devoir_id);
+          {!dbError && !dbLoading && dbDevoirs && dbDevoirs.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="py-2 pr-3">Date</th>
+                    <th className="py-2 pr-3">Matière</th>
+                    <th className="py-2 pr-3">À faire</th>
+                    <th className="py-2 pr-3">Contrôle</th>
+                    <th className="py-2 pr-3">Score matière</th>
+                    <th className="py-2 pr-3">Score contrôle</th>
+                    <th className="py-2 pr-3">Score</th>
+                    <th className="py-2 pr-3">Fiche</th>
+                    <th className="py-2 pr-0 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dbDevoirs.map((dv) => {
+                    const aFaireUI = !Boolean(dv.effectue);
+                    const isGreen = ficheFlags.greenIds.has(dv.ed_devoir_id);
 
-                      return (
-                        <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
-                          <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
-                          <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
-                          <td className="py-2 pr-3">
-                            {aFaireUI ? chip('Oui', 'amber') : chip('Non', 'green')}
-                          </td>
-                          <td className="py-2 pr-3">
-                            {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
-                          </td>
-                          <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
-                          <td className="py-2 pr-3">
-                            {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
-                          </td>
-                          <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
-                          <td className="py-2 pr-3">
-                            {isGreen ? (
-                              <span className="inline-flex items-center gap-1 text-green-600">
-                                <span className="text-lg leading-none">●</span>
-                                <span className="text-xs text-gray-600">
-                                  {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
-                                </span>
+                    return (
+                      <tr key={`${dv.ed_devoir_id}`} className="border-b last:border-0">
+                        <td className="py-2 pr-3 font-medium">{dv.due_date ?? '—'}</td>
+                        <td className="py-2 pr-3">{dv.matiere ?? '—'}</td>
+                        <td className="py-2 pr-3">
+                          {aFaireUI ? chip('Oui', 'amber') : chip('Non', 'green')}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {dv.interrogation ? chip('Oui', 'red') : chip('Non', 'blue')}
+                        </td>
+                        <td className="py-2 pr-3">{dv.coef_matiere ?? 1}</td>
+                        <td className="py-2 pr-3">
+                          {dv.coef_controle ?? (dv.interrogation ? 2 : 1)}
+                        </td>
+                        <td className="py-2 pr-3 font-semibold">{dv.score ?? 1}</td>
+                        <td className="py-2 pr-3">
+                          {isGreen ? (
+                            <span className="inline-flex items-center gap-1 text-green-600">
+                              <span className="text-lg leading-none">●</span>
+                              <span className="text-xs text-gray-600">
+                                {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
                               </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-red-600">
-                                <span className="text-lg leading-none">✕</span>
-                                <span className="text-xs text-gray-600">
-                                  {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
-                                </span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-red-600">
+                              <span className="text-lg leading-none">✕</span>
+                              <span className="text-xs text-gray-600">
+                                {dv.date_realisation ? toParisYMD(dv.date_realisation) : '—'}
                               </span>
-                            )}
-                          </td>
+                            </span>
+                          )}
+                        </td>
 
-                          <td className="py-2 pr-0">
-                            <div className="flex justify-end">
-                              <RowActionMenu
-                                onMarkToday={() => updateDevoirAction(dv.ed_devoir_id, 'today')}
-                                onMarkYesterday={() =>
-                                  updateDevoirAction(dv.ed_devoir_id, 'yesterday')
-                                }
-                                onMarkPrevious={() =>
-                                  updateDevoirAction(dv.ed_devoir_id, 'previous')
-                                }
-                                onMarkNotDone={() =>
-                                  updateDevoirAction(dv.ed_devoir_id, 'not_done')
-                                }
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </>
+                        <td className="py-2 pr-0">
+                          <div className="flex justify-end">
+                            <RowActionMenu
+                              onMarkToday={() => updateDevoirAction(dv.ed_devoir_id, 'today')}
+                              onMarkYesterday={() =>
+                                updateDevoirAction(dv.ed_devoir_id, 'yesterday')
+                              }
+                              onMarkPrevious={() => updateDevoirAction(dv.ed_devoir_id, 'previous')}
+                              onMarkNotDone={() => updateDevoirAction(dv.ed_devoir_id, 'not_done')}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </section>
   );

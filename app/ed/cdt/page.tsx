@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import styles from '../../styles/readable.module.css';
 import StudentHeader from '../../components/ui/StudentHeader';
+import DevoirsPanel from '../../components/DevoirsPanel';
 
 type CdtResponse = { ok: boolean; status: number; data: any };
 type CdtDayResponse = { ok: boolean; status: number; data: any };
@@ -333,6 +334,9 @@ export default function CdtPage() {
           {/* LISTE CONTRASTÉE */}
           <section className="rounded-2xl border p-4 space-y-4 border-gray-300 bg-white/60 backdrop-blur">
             <h2 className="text-lg font-semibold text-black">Cahier de texte</h2>
+
+            {/* Prochains devoirs : déplacé ici depuis le dashboard */}
+            <DevoirsPanel showProchains showFiche={false} />
 
             {itemsByDate.length === 0 && !loading && (
               <div className="text-sm text-gray-800">
