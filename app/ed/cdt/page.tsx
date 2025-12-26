@@ -293,37 +293,21 @@ export default function CdtPage() {
         <div className="max-w-5xl mx-auto space-y-6">
           {/* HEADER blanc */}
           <StudentHeader
-                              // Facultatif : passe les props si tu les as déjà en main
-                              // prenom="Lucas"
-                              // photoUrl="https://…/photo.jpg"
-                              // page -"Emploi du temps"
-                              pages={[
-                                { href: '/dashboard', label: 'Dashboard' },
-                                { href: '/ed/agenda', label: 'EDT' },
-                                { href: '/ed/cdt', label: 'CDT' },
-                                { href: '/configuration', label: 'Configuration' },
-                                { href: '/ed/eleves', label: 'Élèves' },
-                                { href: '/', label: 'Déconnexion' },
-                              ]}
-                            />
+            // Facultatif : passe les props si tu les as déjà en main
+            // prenom="Lucas"
+            // photoUrl="https://…/photo.jpg"
+            // page -"Emploi du temps"
+            pages={[
+              { href: '/dashboard', label: 'Dashboard' },
+              { href: '/ed/agenda', label: 'EDT' },
+              { href: '/ed/cdt', label: 'CDT' },
+              { href: '/configuration', label: 'Configuration' },
+              { href: '/ed/eleves', label: 'Élèves' },
+              { href: '/', label: 'Déconnexion' },
+            ]}
+          />
 
-          {/* Barre d'action */}
-          <form
-            onSubmit={loadCdt}
-            className="rounded-2xl border p-4 flex items-center gap-3 border-gray-300 bg-white/60 backdrop-blur"
-          >
-            <button
-              type="submit"
-              disabled={loading || !eleveId}
-              className="rounded-xl bg-black text-white px-4 py-2 disabled:opacity-50"
-              title={!eleveId ? 'Élève introuvable dans la sélection' : 'Recharger'}
-            >
-              {loading ? 'Chargement…' : 'Recharger'}
-            </button>
-            <span className="text-xs text-gray-700">
-              Liste des devoirs à faire à partir d’aujourd’hui (groupés par date).
-            </span>
-          </form>
+        
 
           {error && (
             <div className="rounded-2xl border border-red-500 bg-red-100 p-3 text-sm text-red-900">
@@ -506,14 +490,6 @@ export default function CdtPage() {
                 </div>
               ))}
             </div>
-          </section>
-
-          {/* Réponse brute */}
-          <section className="rounded-2xl border p-6 space-y-3 border-gray-300 bg-white/60 backdrop-blur">
-            <h2 className="text-lg font-semibold text-black">Réponse brute</h2>
-            <pre className="text-xs overflow-auto p-4 rounded-xl bg-gray-900 text-gray-100 font-mono leading-relaxed border border-gray-700">
-              {JSON.stringify(raw, null, 2)}
-            </pre>
           </section>
         </div>
       </main>

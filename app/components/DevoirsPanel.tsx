@@ -1,8 +1,11 @@
 // components/DevoirsPanel.tsx
+// Vue principale des devoirs : charge ED, synchronise Supabase, calcule la fiche du jour,
+// affiche la table complète, la fiche, et des suggestions de contrôles.
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+// Types simplifiés pour ED et DB
 type EdCdtItem = {
   matiere?: string;
   codeMatiere?: string;
@@ -45,6 +48,7 @@ type DbDevoir = {
   date_realisation?: string | null;
 };
 
+// Récupère token / élève / établissement depuis la session (fallbacks inclus)
 function getTokenAndEleveId() {
   let token: string | null = null;
   let eleveId: number | null = null;
@@ -126,6 +130,9 @@ function RowActionMenu({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
+  // Écoute les changements de sessionStorage (token/élève)
+  // Après chargement ED, synchronise Supabase puis recharge la DB locale
+  // Recharge quand l'élève change ou après une sync ED (via lastSyncedKey)
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       if (!ref.current) return;
@@ -259,6 +266,7 @@ export default function DevoirsPanel({
 
   const disabled = useMemo(() => !token || !eleveId, [token, eleveId]);
 
+  // Charge le cahier de texte ED et gère l'état d'erreur/chargement
   useEffect(() => {
     let abort = false;
 
@@ -301,6 +309,7 @@ export default function DevoirsPanel({
     };
   }, [token, eleveId, disabled]);
 
+  // Normalise la réponse ED en map date -> items
   const normalized: EdCdtData | null = useMemo(() => {
     if (!payload) return null;
     const root =
@@ -368,6 +377,7 @@ export default function DevoirsPanel({
     };
   }, [eleveId, normalized]);
 
+  // Recharge les devoirs depuis Supabase (après merge ED/DB)
   async function reloadFromDb() {
     if (!eleveId) return;
     setDbLoading(true);
@@ -401,6 +411,7 @@ export default function DevoirsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eleveId, lastSyncedKeyRef.current]);
 
+  // Petit helper de badge coloré
   function chip(v: any, color?: 'green' | 'red' | 'blue' | 'amber') {
     const base = 'inline-block px-2 py-0.5 text-xs rounded-full border';
     const cx =
@@ -448,6 +459,7 @@ export default function DevoirsPanel({
     d.setDate(d.getDate() + days);
     return parisYMD(d);
   }
+  // Règles des bulles vertes
   function isFicheGreen(dv: DbDevoir) {
     const tomorrow = parisShiftYMD(1);
     const yesterday = parisShiftYMD(-1);
@@ -472,7 +484,7 @@ export default function DevoirsPanel({
     return false;
   }
 
-  // Tri commun (date croissante puis score croissant)
+  // Tri commun (date croissante puis score décroissant)
   const sortedDevoirs = useMemo(() => {
     const norm = (s?: string | null) => toParisYMD(s ?? undefined) ?? '9999-12-31';
     return [...dbDevoirs].sort((a, b) => {
@@ -518,10 +530,12 @@ export default function DevoirsPanel({
   }
 
   const ficheFlags = useMemo(() => computeFicheFlags(), [dbDevoirs, ficheScore]);
+  // Devoirs associés à la fiche (verts)
   const ficheDevoirs = useMemo(
     () => sortedDevoirs.filter((dv) => ficheFlags.greenIds.has(dv.ed_devoir_id)),
     [sortedDevoirs, ficheFlags.greenIds],
   );
+  // Contrôles non verts à suggérer en plus
   const controlesACommencer = useMemo(
     () =>
       sortedDevoirs.filter(
@@ -533,6 +547,7 @@ export default function DevoirsPanel({
     [sortedDevoirs, ficheFlags.greenIds],
   );
 
+  // Actions de mise à jour (fait, hier, etc.) avec optimistic update
   async function updateDevoirAction(
     ed_devoir_id: number,
     action: 'today' | 'yesterday' | 'previous' | 'not_done',
@@ -705,6 +720,7 @@ export default function DevoirsPanel({
         </div>
       )}
 
+      {/* Prochains devoirs (section CDT) */}
       {!disabled && showProchains && (
         <div className="rounded-2xl border p-4">
           <div className="flex items-center justify-between mb-3">
