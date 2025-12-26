@@ -713,13 +713,6 @@ export default function DevoirsPanel({
         </div>
       )}
 
-      {!disabled && !loading && !error && (
-        <div className="rounded-lg border p-4">
-          <div className="text-sm opacity-60 mb-2">Aperçu (ED / sync effectuée)</div>
-          <div className="text-sm">Les données sont synchronisées en base à chaque affichage.</div>
-        </div>
-      )}
-
       {/* Prochains devoirs (section CDT) */}
       {!disabled && showProchains && (
         <div className="rounded-2xl border p-4">

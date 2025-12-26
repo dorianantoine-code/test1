@@ -243,8 +243,6 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               </section>
-              {/* Passe le callback pour récupérer la valeur */}
-              <CalculDispo onAggregateScore={(score) => setWeekScore(score)} />
               {/* Liste les devoirs (uniquement la fiche de travail sur le dashboard) */}
               <DevoirsPanel showProchains={false} showFiche />
 
