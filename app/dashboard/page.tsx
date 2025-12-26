@@ -108,10 +108,10 @@ export default function DashboardPage() {
     return 'Dashboard';
   }, [selectedId, selectedName]);
 
-  const selectedElevePayload = useMemo(() => findEleveById(loginData, selectedId), [
-    loginData,
-    selectedId,
-  ]);
+  const selectedElevePayload = useMemo(
+    () => findEleveById(loginData, selectedId),
+    [loginData, selectedId],
+  );
 
   // complète l'établissement depuis le payload élève si dispo
   useEffect(() => {
@@ -258,40 +258,6 @@ export default function DashboardPage() {
                     <span>Données élève introuvables dans la session.</span>
                   )}
                 </div>
-              </section>
-
-              {/* Debug: données ED brutes (CDT) */}
-              <section className="rounded-2xl border p-4 space-y-2">
-                <h3 className="text-lg font-medium text-black">Données ED (brut /api/ed/cdt)</h3>
-                {edRawLoading && <div className="text-sm text-gray-700">Chargement…</div>}
-                {edRawError && <div className="text-sm text-red-600">Erreur : {edRawError}</div>}
-                {edRawJson && (
-                  <pre className="overflow-auto rounded-xl bg-gray-900 text-gray-100 p-3 text-xs">
-                    {JSON.stringify(edRawJson, null, 2)}
-                  </pre>
-                )}
-                {!edRawJson && !edRawLoading && !edRawError && (
-                  <div className="text-sm text-gray-700">Aucune donnée ED disponible.</div>
-                )}
-              </section>
-
-              {/* Debug: devoirs JSON (état DB après merge ED) */}
-              <section className="rounded-2xl border p-4 space-y-2">
-                <h3 className="text-lg font-medium text-black">Données devoirs (JSON)</h3>
-                {devoirJsonLoading && (
-                  <div className="text-sm text-gray-700">Chargement des devoirs…</div>
-                )}
-                {devoirJsonError && (
-                  <div className="text-sm text-red-600">Erreur : {devoirJsonError}</div>
-                )}
-                {devoirJson && (
-                  <pre className="overflow-auto rounded-xl bg-gray-900 text-gray-100 p-3 text-xs">
-                    {JSON.stringify(devoirJson, null, 2)}
-                  </pre>
-                )}
-                {!devoirJson && !devoirJsonLoading && !devoirJsonError && (
-                  <div className="text-sm text-gray-700">Aucune donnée devoir disponible.</div>
-                )}
               </section>
             </>
           )}
