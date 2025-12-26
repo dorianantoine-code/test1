@@ -245,20 +245,6 @@ export default function DashboardPage() {
               </section>
               {/* Liste les devoirs (uniquement la fiche de travail sur le dashboard) */}
               <DevoirsPanel showProchains={false} showFiche />
-
-              {/* Debug: payload élève sélectionné */}
-              <section className="rounded-2xl border p-4 space-y-2">
-                <h3 className="text-lg font-medium text-black">Données élève (JSON)</h3>
-                <div className="text-xs text-gray-700">
-                  {selectedElevePayload ? (
-                    <pre className="overflow-auto rounded-xl bg-gray-900 text-gray-100 p-3">
-                      {JSON.stringify(selectedElevePayload, null, 2)}
-                    </pre>
-                  ) : (
-                    <span>Données élève introuvables dans la session.</span>
-                  )}
-                </div>
-              </section>
             </>
           )}
         </div>

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import styles from '../styles/readable.module.css';
 import StudentHeader from '../components/ui/StudentHeader';
-import DevoirsPanel from '../components/DevoirsPanel';
+import DevoirsPanelDebug from '../components/DevoirsPanelDebug';
 import CalculDispo from '../components/CalculDispo';
 
 type LoginData = { account?: any; accounts?: any[]; token?: string };
@@ -232,7 +232,7 @@ export default function DashboardDebugPage() {
 
               <CalculDispo onAggregateScore={(score) => setWeekScore(score)} />
 
-              <DevoirsPanel showProchains={false} showFiche />
+              <DevoirsPanelDebug showProchains={false} showFiche />
 
               {/* Debug: payload élève sélectionné */}
               <section className="rounded-2xl border p-4 space-y-2">
