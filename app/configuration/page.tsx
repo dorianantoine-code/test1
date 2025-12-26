@@ -9,8 +9,10 @@ import { useEffect, useMemo, useState } from 'react';
 export default function ConfigurationPage() {
   const [eleveId, setEleveId] = useState<number | null>(null);
   const [etablissement, setEtablissement] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<number | null>(null);
 
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [debugMode, setDebugMode] = useState<boolean>(false);
   const [vitesse, setVitesse] = useState<number | null>(null);
   const [vitesseLoading, setVitesseLoading] = useState(false);
   const [vitesseSaving, setVitesseSaving] = useState(false);
@@ -21,13 +23,33 @@ export default function ConfigurationPage() {
     try {
       const idStr = sessionStorage.getItem('ed_selected_eleve_id');
       const etab = sessionStorage.getItem('ed_selected_eleve_etablissement');
+      const acc = sessionStorage.getItem('ed_account_id');
       if (idStr) setEleveId(Number(idStr));
       if (etab) setEtablissement(etab);
+      if (acc) setAccountId(Number(acc));
+      // fallback : chercher dans ed_login_data
+      if (!acc) {
+        const raw = sessionStorage.getItem('ed_login_data');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const accId =
+            parsed?.data?.accounts?.[0]?.id ??
+            parsed?.accounts?.[0]?.id ??
+            parsed?.data?.account?.id ??
+            null;
+          if (accId) {
+            setAccountId(Number(accId));
+            sessionStorage.setItem('ed_account_id', String(accId));
+          }
+        }
+      }
     } catch {}
 
     try {
       const stored = localStorage.getItem('prefers-dark-mode');
       if (stored) setDarkMode(stored === 'true');
+      const dbg = localStorage.getItem('prefers-debug-mode');
+      if (dbg) setDebugMode(dbg === 'true');
     } catch {}
   }, []);
 
@@ -48,6 +70,62 @@ export default function ConfigurationPage() {
       }
     } catch {}
   }, [darkMode]);
+
+  // persiste le mode debug (pour un usage ultérieur côté client)
+  useEffect(() => {
+    try {
+      localStorage.setItem('prefers-debug-mode', String(debugMode));
+    } catch {}
+  }, [debugMode]);
+
+  // Charger les prefs compte (dark/debug)
+  useEffect(() => {
+    let aborted = false;
+    async function loadPrefs() {
+      if (!accountId) return;
+      try {
+        const res = await fetch('/api/compte/prefs', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ accountId, fetchOnly: true }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
+        if (aborted) return;
+        if (typeof json?.data?.pref_dark_mode === 'boolean') setDarkMode(json.data.pref_dark_mode);
+        if (typeof json?.data?.pref_debug_mode === 'boolean') setDebugMode(json.data.pref_debug_mode);
+      } catch (e) {
+        console.warn('[config] load prefs compte', e);
+      }
+    }
+    loadPrefs();
+    return () => {
+      aborted = true;
+    };
+  }, [accountId]);
+
+  // Sauvegarde prefs compte
+  useEffect(() => {
+    let abort = false;
+    async function savePrefs() {
+      if (!accountId) return;
+      try {
+        const res = await fetch('/api/compte/prefs', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ accountId, darkMode, debugMode }),
+        });
+        const json = await res.json().catch(() => null);
+        if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
+      } catch (e) {
+        if (!abort) console.warn('[config] save prefs compte', e);
+      }
+    }
+    savePrefs();
+    return () => {
+      abort = true;
+    };
+  }, [accountId, darkMode, debugMode]);
 
   const vitesseLabel = useMemo(() => {
     if (vitesse === 1) return 'Très lent';
@@ -172,24 +250,47 @@ export default function ConfigurationPage() {
               <div>
                 <h2 className="text-lg font-medium">Paramètres généraux</h2>
                 <p className="text-sm opacity-80">
-                  Activer / désactiver le mode sombre (jour / nuit).
+                  Activer / désactiver le mode sombre (jour / nuit) et le mode debug.
                 </p>
               </div>
-              <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Mode sombre</span>
-                <div
-                  onClick={() => setDarkMode((v) => !v)}
-                  className={`relative w-12 h-6 rounded-full transition ${
-                    darkMode ? 'bg-black' : 'bg-gray-300'
-                  }`}
-                >
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
                   <div
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transform transition ${
-                      darkMode ? 'translate-x-6' : 'translate-x-0.5'
+                    onClick={() => setDarkMode((v) => !v)}
+                    className={`relative w-12 h-6 rounded-full transition ${
+                      darkMode ? 'bg-black' : 'bg-gray-300'
                     }`}
-                  />
-                </div>
-              </label>
+                  >
+                    <div
+                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transform transition ${
+                        darkMode ? 'translate-x-6' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Mode debug</span>
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                  <div
+                    onClick={() => setDebugMode((v) => !v)}
+                    className={`relative w-12 h-6 rounded-full transition ${
+                      debugMode ? 'bg-black' : 'bg-gray-300'
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transform transition ${
+                        debugMode ? 'translate-x-6' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </div>
+                </label>
+              </div>
             </div>
           </section>
 

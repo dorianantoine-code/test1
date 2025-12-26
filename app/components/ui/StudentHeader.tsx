@@ -23,6 +23,7 @@ export default function StudentHeader({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const [debugMode, setDebugMode] = useState(false);
 
   // Fallback: si pas de props, on tente la sessionStorage (si déjà renseignée dans ton app)
   const [name, setName] = useState(prenom);
@@ -42,6 +43,19 @@ export default function StudentHeader({
       } catch {}
     }
   }, [prenom, photoUrl]);
+
+  // Charge le mode debug depuis le stockage local
+  useEffect(() => {
+    try {
+      const dbg = localStorage.getItem('prefers-debug-mode');
+      if (dbg) setDebugMode(dbg === 'true');
+    } catch {}
+  }, []);
+
+  // Adapte la destination du lien Dashboard en fonction du mode debug
+  const resolvedPages = pages.map((p) =>
+    p.href === '/dashboard' ? { ...p, href: debugMode ? '/dashboard-debug' : '/dashboard' } : p,
+  );
 
   // Fermeture clic extérieur / Escape
   useEffect(() => {
@@ -124,7 +138,7 @@ const initials =
 
             {open && (
               <div role="menu" className={styles.menuList}>
-                {pages.map((p) => (
+                {resolvedPages.map((p) => (
                   <Link
                     key={p.href}
                     href={p.href}

@@ -1,4 +1,4 @@
-// app/dashboard/page.tsx
+// app/dashboard-debug/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -8,7 +8,6 @@ import styles from '../styles/readable.module.css';
 import StudentHeader from '../components/ui/StudentHeader';
 import DevoirsPanel from '../components/DevoirsPanel';
 import CalculDispo from '../components/CalculDispo';
-/* Exemple dans ton Dashboard/DevoirsPanel */
 
 type LoginData = { account?: any; accounts?: any[]; token?: string };
 
@@ -25,7 +24,7 @@ function findEleveById(loginData: any, id: number | null) {
   return null;
 }
 
-export default function DashboardPage() {
+export default function DashboardDebugPage() {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [loginData, setLoginData] = useState<LoginData | null>(null);
@@ -59,7 +58,6 @@ export default function DashboardPage() {
     } catch {}
   }, []);
 
-  // Redirections
   useEffect(() => {
     if (token === null) return;
     if (!token) router.replace('/');
@@ -69,16 +67,6 @@ export default function DashboardPage() {
     if (selectedId === null) return;
     if (!selectedId) router.replace('/ed/eleves');
   }, [selectedId, router]);
-
-  // Si mode debug activé, redirige vers /dashboard-debug
-  useEffect(() => {
-    try {
-      const dbg = localStorage.getItem('prefers-debug-mode');
-      if (dbg === 'true') {
-        router.replace('/dashboard-debug');
-      }
-    } catch {}
-  }, [router]);
 
   function absolutePhoto(src?: string | null) {
     if (!src) return undefined;
@@ -105,7 +93,7 @@ export default function DashboardPage() {
   const headerEleve = useMemo(() => {
     if (selectedId && selectedName) return `Élève ${selectedName} (#${selectedId})`;
     if (selectedId) return `Élève #${selectedId}`;
-    return 'Dashboard';
+    return 'Dashboard debug';
   }, [selectedId, selectedName]);
 
   const selectedElevePayload = useMemo(() => findEleveById(loginData, selectedId), [
@@ -113,7 +101,6 @@ export default function DashboardPage() {
     selectedId,
   ]);
 
-  // complète l'établissement depuis le payload élève si dispo
   useEffect(() => {
     const eleve: any = selectedElevePayload;
     const fromPayload =
@@ -206,6 +193,7 @@ export default function DashboardPage() {
         <div className="max-w-3xl mx-auto space-y-6">
           <StudentHeader
             pages={[
+              { href: '/dashboard-debug', label: 'Dashboard debug' },
               { href: '/dashboard', label: 'Dashboard' },
               { href: '/ed/agenda', label: 'EDT' },
               { href: '/ed/cdt', label: 'CDT' },
@@ -226,7 +214,6 @@ export default function DashboardPage() {
             </div>
           ) : (
             <>
-              {/* Bloc Configurer mon compte + bouton Configurer ma fiche */}
               <section className="rounded-2xl border p-6 space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg font-medium">
@@ -234,7 +221,6 @@ export default function DashboardPage() {
                     d'affiner le temps que je passe par matière ?{' '}
                   </h2>
 
-                  {/* 👉 Nouveau bouton */}
                   <Link
                     href="/configuration"
                     className="inline-flex items-center rounded-xl bg-black text-white px-4 py-2 hover:opacity-90"
@@ -243,9 +229,9 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               </section>
-              {/* Passe le callback pour récupérer la valeur */}
+
               <CalculDispo onAggregateScore={(score) => setWeekScore(score)} />
-              {/* Liste les devoirs (uniquement la fiche de travail sur le dashboard) */}
+
               <DevoirsPanel showProchains={false} showFiche />
 
               {/* Debug: payload élève sélectionné */}
