@@ -35,6 +35,8 @@ export default function DashboardPage() {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [selectedEtab, setSelectedEtab] = useState<string | null>(null);
   const [weekScore, setWeekScore] = useState<number | null>(null);
+  const [scoreReady, setScoreReady] = useState<boolean>(false);
+  const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
   const [devoirJson, setDevoirJson] = useState<any | null>(null);
   const [devoirJsonError, setDevoirJsonError] = useState<string | null>(null);
   const [devoirJsonLoading, setDevoirJsonLoading] = useState(false);
@@ -69,6 +71,30 @@ export default function DashboardPage() {
     if (selectedId === null) return;
     if (!selectedId) router.replace('/ed/eleves');
   }, [selectedId, router]);
+
+  // Init score depuis sessionStorage (si CalculDispo l'a déjà calculé)
+  useEffect(() => {
+    try {
+      const s = sessionStorage.getItem('calcdispo_day_score');
+      if (s) {
+        const v = parseFloat(s);
+        if (!Number.isNaN(v)) setWeekScore(v);
+      }
+    } catch {}
+    setScoreReady(true); // on considère l'init terminée même si pas de valeur
+  }, []);
+
+  // Overlay loader : visible tant que score non prêt ou chargements en cours
+  useEffect(() => {
+    // Si l'un des chargements est actif ou score pas prêt -> overlay ON
+    if (!scoreReady || devoirJsonLoading || edRawLoading) {
+      setOverlayVisible(true);
+      return;
+    }
+    // Sinon on laisse un petit délai pour éviter le clignotement
+    const t = setTimeout(() => setOverlayVisible(false), 300);
+    return () => clearTimeout(t);
+  }, [scoreReady, devoirJsonLoading, edRawLoading]);
 
   // Si mode debug activé, redirige vers /dashboard-debug
   useEffect(() => {
@@ -204,6 +230,14 @@ export default function DashboardPage() {
     <div className={styles.readable}>
       <main className="min-h-screen p-6 md:p-10">
         <div className="max-w-3xl mx-auto space-y-6">
+          {overlayVisible && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-12 w-12 border-4 border-black/20 border-t-black animate-spin rounded-full" />
+                <p className="text-sm text-black">Chargement du score et des données…</p>
+              </div>
+            </div>
+          )}
           <StudentHeader
             pages={[
               { href: '/dashboard', label: 'Dashboard' },

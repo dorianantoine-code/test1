@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import styles from '../../styles/readable.module.css'; // ← garde les mêmes styles
 
@@ -53,9 +53,18 @@ export default function StudentHeader({
   }, []);
 
   // Adapte la destination du lien Dashboard en fonction du mode debug
-  const resolvedPages = pages.map((p) =>
-    p.href === '/dashboard' ? { ...p, href: debugMode ? '/dashboard-debug' : '/dashboard' } : p,
-  );
+  const resolvedPages = useMemo(() => {
+    const mapped = pages.map((p) =>
+      p.href === '/dashboard' ? { ...p, href: debugMode ? '/dashboard-debug' : '/dashboard' } : p,
+    );
+    // supprime les doublons de href pour éviter les clés identiques
+    const seen = new Set<string>();
+    return mapped.filter((p) => {
+      if (seen.has(p.href)) return false;
+      seen.add(p.href);
+      return true;
+    });
+  }, [pages, debugMode]);
 
   // Fermeture clic extérieur / Escape
   useEffect(() => {
