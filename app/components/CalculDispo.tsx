@@ -93,6 +93,12 @@ function ymd(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
+function isNextDay(d1: string, d2: string): boolean {
+  const dt = new Date(`${d1}T00:00:00`);
+  dt.setDate(dt.getDate() + 1);
+  return ymd(dt) === d2;
+}
+
 function toMinutes(str: string): number | null {
   if (!str) return null;
   const parts = str.split(' ');
@@ -346,6 +352,32 @@ export default function CalculDispo({ onAggregateScore }: Props) {
         conge,
       });
     }
+
+    // Ajustement congés >3 jours consécutifs : score base = 2 au lieu de 3
+    let i = 0;
+    while (i < out.length) {
+      if (!out[i].conge) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (
+        j + 1 < out.length &&
+        out[j + 1].conge &&
+        isNextDay(out[j].date, out[j + 1].date)
+      ) {
+        j++;
+      }
+      const len = j - i + 1;
+      if (len > 3) {
+        for (let k = i; k <= j; k++) {
+          out[k].scoreBase = 2;
+          out[k].scoreTotal = out[k].scoreBase + out[k].scorePerso;
+        }
+      }
+      i = j + 1;
+    }
+
     return out;
   }, [raw, daysWithPersonalEvent]);
 
@@ -457,7 +489,10 @@ export default function CalculDispo({ onAggregateScore }: Props) {
               <ul className="list-disc ml-4 space-y-1">
                 <li>Somme des scores quotidiens de {aggFrom} à {aggTo}</li>
                 <li>Score quotidien = score base (EDT/congés) + score perso (agenda perso)</li>
-                <li>Score base : 3 si congés, 2 si sortie &lt; 15h, 1.5 si 15h-16h, sinon 1</li>
+                <li>
+                  Score base : 3 si congés, 2 si sortie &lt; 15h, 1.5 si 15h-16h, sinon 1
+                  (mais si &gt; 3 jours de congés consécutifs, on compte 2 par jour)
+                </li>
                 <li>Score perso : -1 si événement perso sur le jour, sinon 0</li>
                 <li>Score total affiché = somme × coef vitesse travail ({vitesseLabel})</li>
               </ul>
