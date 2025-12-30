@@ -34,6 +34,7 @@ export default function DashboardDebugPage() {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [selectedEtab, setSelectedEtab] = useState<string | null>(null);
   const [weekScore, setWeekScore] = useState<number | null>(null);
+  const [hasWeekScore, setHasWeekScore] = useState<boolean>(false);
   const [devoirJson, setDevoirJson] = useState<any | null>(null);
   const [devoirJsonError, setDevoirJsonError] = useState<string | null>(null);
   const [devoirJsonLoading, setDevoirJsonLoading] = useState(false);
@@ -67,6 +68,26 @@ export default function DashboardDebugPage() {
     if (selectedId === null) return;
     if (!selectedId) router.replace('/ed/eleves');
   }, [selectedId, router]);
+
+  // Détecte la présence d'un score (calcdispo) en session
+  useEffect(() => {
+    const check = () => {
+      try {
+        const s = sessionStorage.getItem('calcdispo_week_score');
+        setHasWeekScore(!!s);
+      } catch {
+        setHasWeekScore(false);
+      }
+    };
+    check();
+    const onStorage = () => check();
+    window.addEventListener('storage', onStorage);
+    const timer = window.setInterval(check, 1000);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.clearInterval(timer);
+    };
+  }, []);
 
   function absolutePhoto(src?: string | null) {
     if (!src) return undefined;
@@ -190,7 +211,18 @@ export default function DashboardDebugPage() {
   return (
     <div className={styles.readable}>
       <main className="min-h-screen p-6 md:p-10">
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="max-w-3xl mx-auto space-y-6 relative">
+          {!hasWeekScore && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-12 w-12 border-4 border-black/20 border-t-black animate-spin rounded-full" />
+                <p className="text-sm text-black text-center">
+                  Calcul du score en cours…<br />
+                  Merci de patienter quelques secondes.
+                </p>
+              </div>
+            </div>
+          )}
           <StudentHeader
             pages={[
               { href: '/dashboard-debug', label: 'Dashboard debug' },

@@ -124,7 +124,7 @@ function endOfTodayTimestamp(): number {
   return d.getTime();
 }
 
-  function extractDailyInfo(raw: any): Record<string, { end: string | null; conge: boolean }> {
+function extractDailyInfo(raw: any): Record<string, { end: string | null; conge: boolean }> {
   console.log('[CalculDispo] extractDailyInfo: raw keys =', Object.keys(raw || {}));
 
   let arr: EdtItem[] = [];
@@ -202,16 +202,17 @@ export default function CalculDispo({ onAggregateScore }: Props) {
   const [{ token, eleveId, etablissement }, setAuth] = useState(getTokenAndEleveId);
   const [vitesseCoef, setVitesseCoef] = useState<number>(1);
   const [vitesseLabel, setVitesseLabel] = useState<string>('Normal');
-  const [vitesseErr, setVitesseErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+const [vitesseErr, setVitesseErr] = useState<string | null>(null);
+const [loading, setLoading] = useState(false);
+const [err, setErr] = useState<string | null>(null);
 
   const [raw, setRaw] = useState<any | null>(null);
   const [agendaItems, setAgendaItems] = useState<AgendaPersoItem[]>([]);
   const [loadingAgenda, setLoadingAgenda] = useState(false);
   const [errAgenda, setErrAgenda] = useState<string | null>(null);
-  const [cacheHit, setCacheHit] = useState(false);
-  const [prefetchedRows, setPrefetchedRows] = useState<Row[] | null>(null);
+const [cacheHit, setCacheHit] = useState(false);
+const [prefetchedRows, setPrefetchedRows] = useState<Row[] | null>(null);
+const [refreshToken, setRefreshToken] = useState<string | null>(null);
 
   const [win] = useState<{ start: string; end: string }>(() => {
     const start = new Date();
@@ -263,6 +264,20 @@ export default function CalculDispo({ onAggregateScore }: Props) {
       setCacheHit(false);
       setPrefetchedRows(null);
     }
+  }, [cacheKey]);
+
+  // Invalidation externe : écoute calcdispo_force_refresh
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'calcdispo_force_refresh') {
+        setRefreshToken(e.newValue ?? Date.now().toString());
+        if (cacheKey) sessionStorage.removeItem(cacheKey);
+        setCacheHit(false);
+        setPrefetchedRows(null);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, [cacheKey]);
 
   // coef vitesse de travail
@@ -331,7 +346,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     return () => {
       aborted = true;
     };
-  }, [token, eleveId, etablissement, win.start, win.end]);
+  }, [token, eleveId, etablissement, win.start, win.end, cacheHit, refreshToken]);
 
   // agenda_perso
   useEffect(() => {
@@ -361,7 +376,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     return () => {
       aborted = true;
     };
-  }, [eleveId, etablissement]);
+  }, [eleveId, etablissement, cacheHit, refreshToken]);
 
   // jours avec événement perso
   const daysWithPersonalEvent: Set<number> = useMemo(() => {
@@ -521,6 +536,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     weekendTo,
     vitesseCoef,
     vitesseLabel,
+    refreshToken,
   ]);
 
   return (
