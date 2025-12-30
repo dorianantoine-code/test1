@@ -121,8 +121,9 @@ const initials =
     <div className={styles.readable}>
       <div className={styles.pageHeader}>
         <div className={styles.pageHeaderRow}>
-          {/* Gauche : avatar + prénom */}
-          <div className={styles.pageHeaderLeft}>
+          {/* Gauche : marque + avatar + prénom */}
+          <div className={styles.pageHeaderLeft} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ fontWeight: 800, fontSize: '18px', letterSpacing: '-0.01em' }}>Dixelo</div>
             {photo ? (
               <img src={proxiedPhoto(photo)} alt={name ?? 'Élève'} referrerPolicy="no-referrer" className={styles.avatar} />
             ) : (

@@ -147,7 +147,8 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="rounded-2xl border p-6 space-y-6">
-          <header className="space-y-1">
+          <header className="space-y-1 text-center">
+            <div className="text-sm font-semibold uppercase tracking-[0.3em] text-gray-500">Dixelo</div>
             <h1 className="text-2xl font-semibold tracking-tight">Connexion EcoleDirecte</h1>
           </header>
 
