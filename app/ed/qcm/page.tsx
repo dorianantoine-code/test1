@@ -333,30 +333,31 @@ export default function QcmPage() {
           </section>
         )}
 
-        {/* Debug: réponses brutes */}
-        {!loading && (
-          <>
-            <details className="rounded-2xl border p-4">
-              <summary className="cursor-pointer text-sm">
-                Debug : réponse /start (JSON brut)
-              </summary>
-              <pre className="text-xs overflow-auto mt-3 bg-gray-50 p-3 rounded-xl">
-                {JSON.stringify(rawStart, null, 2)}
-              </pre>
-            </details>
-
-            {rawAnswer && (
+        {/* Debug: réponses brutes — conservé en code mais masqué */}
+        {false &&
+          !loading && (
+            <>
               <details className="rounded-2xl border p-4">
                 <summary className="cursor-pointer text-sm">
-                  Debug : réponse /answer (JSON brut)
+                  Debug : réponse /start (JSON brut)
                 </summary>
                 <pre className="text-xs overflow-auto mt-3 bg-gray-50 p-3 rounded-xl">
-                  {JSON.stringify(rawAnswer, null, 2)}
+                  {JSON.stringify(rawStart, null, 2)}
                 </pre>
               </details>
-            )}
-          </>
-        )}
+
+              {rawAnswer && (
+                <details className="rounded-2xl border p-4">
+                  <summary className="cursor-pointer text-sm">
+                    Debug : réponse /answer (JSON brut)
+                  </summary>
+                  <pre className="text-xs overflow-auto mt-3 bg-gray-50 p-3 rounded-xl">
+                    {JSON.stringify(rawAnswer, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </>
+          )}
       </div>
     </main>
   );
