@@ -701,8 +701,6 @@ export default function DevoirsPanel({
         </div>
       )}
 
-      {!disabled && loading && <div className="rounded-lg border p-4">Chargement des devoirs…</div>}
-
       {!disabled && error && (
         <div className="rounded-lg border p-4 text-red-600">Erreur : {error}</div>
       )}
