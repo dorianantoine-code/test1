@@ -118,7 +118,13 @@ function nextThursdayFrom(today: Date): Date {
   return d;
 }
 
-function extractDailyInfo(raw: any): Record<string, { end: string | null; conge: boolean }> {
+function endOfTodayTimestamp(): number {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+}
+
+  function extractDailyInfo(raw: any): Record<string, { end: string | null; conge: boolean }> {
   console.log('[CalculDispo] extractDailyInfo: raw keys =', Object.keys(raw || {}));
 
   let arr: EdtItem[] = [];
@@ -204,6 +210,8 @@ export default function CalculDispo({ onAggregateScore }: Props) {
   const [agendaItems, setAgendaItems] = useState<AgendaPersoItem[]>([]);
   const [loadingAgenda, setLoadingAgenda] = useState(false);
   const [errAgenda, setErrAgenda] = useState<string | null>(null);
+  const [cacheHit, setCacheHit] = useState(false);
+  const [prefetchedRows, setPrefetchedRows] = useState<Row[] | null>(null);
 
   const [win] = useState<{ start: string; end: string }>(() => {
     const start = new Date();
@@ -217,6 +225,45 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
+
+  const cacheKey = useMemo(() => {
+    if (!eleveId) return null;
+    return `calcdispo_cache_${eleveId}_${etablissement ?? 'default'}`;
+  }, [eleveId, etablissement]);
+
+  // Tentative de lecture cache (sessionStorage) valable jusqu'à fin de journée
+  useEffect(() => {
+    if (!cacheKey) return;
+    try {
+      const rawCache = sessionStorage.getItem(cacheKey);
+      if (!rawCache) {
+        setCacheHit(false);
+        setPrefetchedRows(null);
+        return;
+      }
+      const parsed = JSON.parse(rawCache);
+      if (!parsed?.expires || parsed.expires < Date.now()) {
+        sessionStorage.removeItem(cacheKey);
+        setCacheHit(false);
+        setPrefetchedRows(null);
+        return;
+      }
+      if (Array.isArray(parsed.rows)) {
+        setPrefetchedRows(parsed.rows);
+        setCacheHit(true);
+        setLoading(false);
+        setLoadingAgenda(false);
+        setErr(null);
+        setErrAgenda(null);
+      } else {
+        setCacheHit(false);
+        setPrefetchedRows(null);
+      }
+    } catch {
+      setCacheHit(false);
+      setPrefetchedRows(null);
+    }
+  }, [cacheKey]);
 
   // coef vitesse de travail
   useEffect(() => {
@@ -259,6 +306,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     let aborted = false;
     async function run() {
       if (!token || !eleveId) return;
+      if (cacheHit) return;
       setLoading(true);
       setErr(null);
       try {
@@ -290,6 +338,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     let aborted = false;
     async function run() {
       if (!eleveId) return;
+      if (cacheHit) return;
       setLoadingAgenda(true);
       setErrAgenda(null);
       try {
@@ -328,6 +377,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
 
   // lignes + scores
   const rows: Row[] = useMemo(() => {
+    if (prefetchedRows) return prefetchedRows;
     if (!raw) return [];
     const byDate = extractDailyInfo(raw);
     const dates = Object.keys(byDate).sort();
@@ -347,7 +397,7 @@ export default function CalculDispo({ onAggregateScore }: Props) {
       });
     }
     return out;
-  }, [raw, daysWithPersonalEvent]);
+  }, [raw, daysWithPersonalEvent, prefetchedRows]);
 
   // agrégat aujourd’hui → jeudi prochain
   const { aggFrom, aggTo, aggregateScore } = useMemo(() => {
@@ -435,6 +485,44 @@ export default function CalculDispo({ onAggregateScore }: Props) {
     } catch {}
   }, [dayLabel, dayScore, weekendFrom, weekendTo, vitesseCoef]);
 
+  // Sauvegarde cache session pour la journée (valable jusqu'à fin de journée)
+  useEffect(() => {
+    if (cacheHit) return;
+    if (!cacheKey) return;
+    if (!rows.length) return;
+    try {
+      const payload = {
+        rows,
+        aggFrom,
+        aggTo,
+        aggregateScore,
+        dayLabel,
+        dayScore,
+        weekendFrom,
+        weekendTo,
+        vitesseCoef,
+        vitesseLabel,
+        expires: endOfTodayTimestamp(),
+      };
+      sessionStorage.setItem(cacheKey, JSON.stringify(payload));
+    } catch {
+      /* ignore */
+    }
+  }, [
+    cacheHit,
+    cacheKey,
+    rows,
+    aggFrom,
+    aggTo,
+    aggregateScore,
+    dayLabel,
+    dayScore,
+    weekendFrom,
+    weekendTo,
+    vitesseCoef,
+    vitesseLabel,
+  ]);
+
   return (
     <section className="rounded-2xl border p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -458,6 +546,10 @@ export default function CalculDispo({ onAggregateScore }: Props) {
                 <li>Somme des scores quotidiens de {aggFrom} à {aggTo}</li>
                 <li>Score quotidien = score base (EDT/congés) + score perso (agenda perso)</li>
                 <li>Score base : 3 si congés, 2 si sortie &lt; 15h, 1.5 si 15h-16h, sinon 1</li>
+                <li className="text-xs text-gray-700">
+                  Règle congés : dès qu&apos;il y a plus de 3 jours de congés consécutifs, chaque
+                  jour de cette séquence est compté 2 au lieu de 3
+                </li>
                 <li>Score perso : -1 si événement perso sur le jour, sinon 0</li>
                 <li>Score total affiché = somme × coef vitesse travail ({vitesseLabel})</li>
               </ul>
