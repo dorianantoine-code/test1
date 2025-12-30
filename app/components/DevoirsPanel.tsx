@@ -121,11 +121,13 @@ function RowActionMenu({
   onMarkYesterday,
   onMarkPrevious,
   onMarkNotDone,
+  onToggleControl,
 }: {
   onMarkToday: () => void;
   onMarkYesterday: () => void;
   onMarkPrevious: () => void;
   onMarkNotDone: () => void;
+  onToggleControl: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -190,6 +192,17 @@ function RowActionMenu({
             }}
           >
             Marquer « Fait – date précédente »
+          </button>
+          <div className="h-px bg-gray-200" />
+          <button
+            role="menuitem"
+            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-800"
+            onClick={() => {
+              setOpen(false);
+              onToggleControl();
+            }}
+          >
+            Contrôle oui / non
           </button>
           <div className="h-px bg-gray-200" />
           <button
@@ -591,6 +604,37 @@ export default function DevoirsPanel({
     }
   }
 
+  async function toggleInterrogation(ed_devoir_id: number, current?: boolean | null) {
+    if (!eleveId) return;
+    const next = !Boolean(current);
+    // Optimistic UI
+    setDbDevoirs((prev) =>
+      prev.map((r) =>
+        r.ed_devoir_id === ed_devoir_id ? { ...r, interrogation: next } : r,
+      ),
+    );
+    try {
+      const res = await fetch('/api/devoir/update', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          ed_eleve_id: eleveId,
+          ed_devoir_id,
+          action: 'toggle_interrogation',
+          interrogation: next,
+          etablissement,
+          token,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+      await reloadFromDb();
+    } catch {
+      await reloadFromDb(); // revert optimistic
+    }
+  }
+
   // === Fiche de devoir du jour / week-end ===
   function todayParisYMD() {
     const fmt = new Intl.DateTimeFormat('fr-CA', {
@@ -771,6 +815,9 @@ export default function DevoirsPanel({
                               }
                               onMarkPrevious={() => updateDevoirAction(dv.ed_devoir_id, 'previous')}
                               onMarkNotDone={() => updateDevoirAction(dv.ed_devoir_id, 'not_done')}
+                              onToggleControl={() =>
+                                toggleInterrogation(dv.ed_devoir_id, dv.interrogation)
+                              }
                             />
                           </div>
                         </td>

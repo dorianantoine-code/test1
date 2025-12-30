@@ -14,7 +14,8 @@ const supabase = createClient(
 type Body = {
   ed_eleve_id: number;
   ed_devoir_id: number;
-  action: 'today' | 'yesterday' | 'previous' | 'not_done';
+  action: 'today' | 'yesterday' | 'previous' | 'not_done' | 'toggle_interrogation';
+  interrogation?: boolean;
   etablissement?: string | null;
   token?: string;
 };
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
   if (
     typeof ed_eleve_id !== 'number' ||
     typeof ed_devoir_id !== 'number' ||
-    !['today', 'yesterday', 'previous', 'not_done'].includes(String(action))
+    !['today', 'yesterday', 'previous', 'not_done', 'toggle_interrogation'].includes(String(action))
   ) {
     return NextResponse.json(
       { error: 'Bad payload. Expect { ed_eleve_id, ed_devoir_id, action }' },
@@ -97,14 +98,25 @@ export async function POST(req: NextRequest) {
       update.effectue = false;
       update.date_realisation = null; // <-- remis à null comme demandé
       break;
+      break;
+    case 'toggle_interrogation':
+      if (typeof (body as any).interrogation !== 'boolean') {
+        return NextResponse.json(
+          { error: 'interrogation boolean is required for toggle_interrogation' },
+          { status: 400 },
+        );
+      }
+      update.interrogation = Boolean((body as any).interrogation);
+      break;
   }
 
   try {
-    // D'abord, tentative de mise à jour côté ED (si token fourni).
-    // Si ED échoue, on renvoie l'erreur et on ne touche pas Supabase.
-    const done = action !== 'not_done';
-    if (token) {
-      await updateEdDevoir({ token, ed_eleve_id, ed_devoir_id, done });
+    // D'abord, tentative de mise à jour côté ED (si token fourni) pour le statut effectué uniquement.
+    if (action !== 'toggle_interrogation') {
+      const done = action !== 'not_done';
+      if (token) {
+        await updateEdDevoir({ token, ed_eleve_id, ed_devoir_id, done });
+      }
     }
 
     let etab = etablissement ? String(etablissement) : null;

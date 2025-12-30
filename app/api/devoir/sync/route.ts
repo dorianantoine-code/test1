@@ -70,7 +70,9 @@ async function readState(
 ) {
   let q = supabase
     .from(TABLE_NAME)
-    .select('ed_eleve_id,etablissement,ed_devoir_id,effectue,date_realisation,last_sync_at')
+    .select(
+      'ed_eleve_id,etablissement,ed_devoir_id,effectue,interrogation,date_realisation,last_sync_at',
+    )
     .eq('ed_eleve_id', ed_eleve_id)
     .eq('etablissement', etablissement)
     .in('ed_devoir_id', ids);
@@ -111,6 +113,12 @@ function mergeEffectueWithBefore(rows: any[], before: any[]) {
       // ED dit "non fait" → on force la remise à zéro
       r.effectue = false;
       r.date_realisation = null;
+    }
+
+    // Interrogation : si la base avait déjà une valeur (vraie/false),
+    // on la conserve pour ne pas écraser un changement manuel.
+    if (typeof prev?.interrogation === 'boolean') {
+      r.interrogation = prev.interrogation;
     }
     return r;
   });
