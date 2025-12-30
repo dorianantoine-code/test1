@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import styles from '../../styles/readable.module.css'; // ← garde les mêmes styles
 
@@ -52,10 +52,34 @@ export default function StudentHeader({
     } catch {}
   }, []);
 
-  // Adapte la destination du lien Dashboard en fonction du mode debug
-  const resolvedPages = pages.map((p) =>
-    p.href === '/dashboard' ? { ...p, href: debugMode ? '/dashboard-debug' : '/dashboard' } : p,
-  );
+  // Adapte la destination du lien Dashboard en fonction du mode debug + renomme les libellés
+  const resolvedPages = useMemo(() => {
+    const mapped = pages.map((p) => {
+      let href = p.href;
+      let label = p.label;
+      if (p.href === '/dashboard') {
+        href = debugMode ? '/dashboard-debug' : '/dashboard';
+        label = 'Ma fiche du jour';
+      } else if (p.href === '/ed/agenda') {
+        label = 'Agenda';
+      } else if (p.href === '/ed/cdt') {
+        label = 'Devoirs';
+      } else if (p.href === '/configuration') {
+        label = 'Paramétrage';
+      } else if (p.href === '/ed/eleves') {
+        label = 'Élèves';
+      } else if (p.href === '/') {
+        label = 'Déconnexion';
+      }
+      return { ...p, href, label };
+    });
+    const seen = new Set<string>();
+    return mapped.filter((p) => {
+      if (seen.has(p.href)) return false;
+      seen.add(p.href);
+      return true;
+    });
+  }, [pages, debugMode]);
 
   // Fermeture clic extérieur / Escape
   useEffect(() => {
