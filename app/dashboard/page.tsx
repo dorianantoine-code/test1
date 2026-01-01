@@ -247,6 +247,16 @@ export default function DashboardPage() {
             ]}
           />
 
+          {/* CalculDispo en tâche de fond (section masquée) pour peupler les scores en session */}
+          <div className="hidden" aria-hidden>
+            <CalculDispo
+              onAggregateScore={(score) => {
+                setWeekScore(score);
+                setHasWeekScore(true);
+              }}
+            />
+          </div>
+
           {!token ? (
             <div className="rounded-2xl border p-6">
               <p className="mb-3">

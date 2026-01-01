@@ -262,7 +262,12 @@ export default function DashboardDebugPage() {
                 </div>
               </section>
 
-              <CalculDispo onAggregateScore={(score) => setWeekScore(score)} />
+              <CalculDispo
+                onAggregateScore={(score) => {
+                  setWeekScore(score);
+                  setHasWeekScore(true);
+                }}
+              />
 
               <DevoirsPanelDebug showProchains={false} showFiche />
 
